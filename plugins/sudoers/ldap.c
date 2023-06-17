@@ -297,8 +297,11 @@ sudo_ldap_get_values_len(LDAP *ld, LDAPMessage *entry, const char *attr, int *rc
  * A matching entry that is negated will always return false.
  */
 static int
-sudo_ldap_check_non_unix_group(LDAP *ld, LDAPMessage *entry, struct passwd *pw)
+sudo_ldap_check_non_unix_group(const struct sudo_nss *nss, LDAPMessage *entry,
+    struct passwd *pw)
 {
+    struct sudo_ldap_handle *handle = nss->handle;
+    LDAP *ld = handle->ld;
     struct berval **bv, **p;
     bool ret = false;
     int rc;
@@ -325,8 +328,7 @@ sudo_ldap_check_non_unix_group(LDAP *ld, LDAPMessage *entry, struct passwd *pw)
 	    negated = true;
 	}
 	if (*val == '+') {
-	    /* Custom innetgr() function not used here. */
-	    if (netgr_matches(NULL, val,
+	    if (netgr_matches(nss, val,
 		def_netgroup_tuple ? user_runhost : NULL,
 		def_netgroup_tuple ? user_srunhost : NULL, pw->pw_name))
 		ret = true;
@@ -855,7 +857,7 @@ sudo_ldap_build_pass1(LDAP *ld, struct passwd *pw)
     }
 
     /* Add space for user netgroups if netgroup_base specified. */
-    if (!STAILQ_EMPTY(&ldap_conf.netgroup_base)) {
+    if (ldap_conf.netgroup_query) {
 	DPRINTF1("Looking up netgroups for %s", pw->pw_name);
 	if (sudo_netgroup_lookup(ld, pw, &netgroups)) {
 	    STAILQ_FOREACH(ng, &netgroups, entries) {
@@ -1024,9 +1026,17 @@ sudo_ldap_build_pass2(void)
     int len;
     debug_decl(sudo_ldap_build_pass2, SUDOERS_DEBUG_LDAP);
 
-    /* No need to query netgroups if using netgroup_base. */
-    if (!STAILQ_EMPTY(&ldap_conf.netgroup_base))
+    /*
+     * If we can query nisNetgroupTriple using netgroup_base, there is
+     * no need to match all netgroups in pass 2.  If netgroups are not
+     * natively supported, netgroup_base must be set.
+     */
+    if (ldap_conf.netgroup_query)
 	query_netgroups = false;
+#ifndef HAVE_INNETGR
+    else if (STAILQ_EMPTY(&ldap_conf.netgroup_base))
+	query_netgroups = false;
+#endif
 
     /* Short circuit if no netgroups and no non-Unix groups. */
     if (!query_netgroups && !def_group_plugin) {
@@ -1845,7 +1855,7 @@ sudo_ldap_result_get(const struct sudo_nss *nss, struct passwd *pw)
 		LDAP_FOREACH(entry, ld, result) {
 		    if (pass != 0) {
 			/* Check non-unix group in 2nd pass. */
-			switch (sudo_ldap_check_non_unix_group(ld, entry, pw)) {
+			switch (sudo_ldap_check_non_unix_group(nss, entry, pw)) {
 			case -1:
 			    goto oom;
 			case false:

@@ -375,7 +375,6 @@ lib/util/strtonum.c
 lib/util/sudo_conf.c
 lib/util/sudo_debug.c
 lib/util/sudo_dso.c
-lib/util/suspend_parent.c
 lib/util/sys_siglist.h
 lib/util/sys_signame.h
 lib/util/term.c
@@ -1054,6 +1053,7 @@ plugins/sudoers/regress/sudoers/test9.ldif.ok
 plugins/sudoers/regress/sudoers/test9.out.ok
 plugins/sudoers/regress/sudoers/test9.toke.ok
 plugins/sudoers/regress/testsudoers/group
+plugins/sudoers/regress/testsudoers/passwd
 plugins/sudoers/regress/testsudoers/test1.out.ok
 plugins/sudoers/regress/testsudoers/test1.sh
 plugins/sudoers/regress/testsudoers/test10.out.ok
@@ -1081,6 +1081,12 @@ plugins/sudoers/regress/testsudoers/test2.out.ok
 plugins/sudoers/regress/testsudoers/test2.sh
 plugins/sudoers/regress/testsudoers/test20.out.ok
 plugins/sudoers/regress/testsudoers/test20.sh
+plugins/sudoers/regress/testsudoers/test21.out.ok
+plugins/sudoers/regress/testsudoers/test21.sh
+plugins/sudoers/regress/testsudoers/test22.out.ok
+plugins/sudoers/regress/testsudoers/test22.sh
+plugins/sudoers/regress/testsudoers/test23.out.ok
+plugins/sudoers/regress/testsudoers/test23.sh
 plugins/sudoers/regress/testsudoers/test3.out.ok
 plugins/sudoers/regress/testsudoers/test3.sh
 plugins/sudoers/regress/testsudoers/test4.out.ok
@@ -1295,6 +1301,7 @@ src/sudo_intercept_common.c
 src/sudo_noexec.c
 src/sudo_plugin_int.h
 src/sudo_usage.h.in
+src/suspend_parent.c
 src/tgetpass.c
 src/ttyname.c
 src/utmp.c

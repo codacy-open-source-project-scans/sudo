@@ -435,7 +435,7 @@ struct group;
 struct passwd;
 bool group_matches(const char *sudoers_group, const struct group *gr);
 bool hostname_matches(const char *shost, const char *lhost, const char *pattern);
-bool netgr_matches(struct sudo_nss *nss, const char *netgr, const char *lhost, const char *shost, const char *user);
+bool netgr_matches(const struct sudo_nss *nss, const char *netgr, const char *lhost, const char *shost, const char *user);
 bool usergr_matches(const char *group, const char *user, const struct passwd *pw);
 bool userpw_matches(const char *sudoers_user, const char *user, const struct passwd *pw);
 int cmnd_matches(const struct sudoers_parse_tree *parse_tree, const struct member *m, const char *runchroot, struct cmnd_info *info);
@@ -466,10 +466,10 @@ int parse_timeout(const char *timestr);
 time_t parse_gentime(const char *expstr);
 
 /* filedigest.c */
-unsigned char *sudo_filedigest(int fd, const char *file, int digest_type, size_t *digest_len);
+unsigned char *sudo_filedigest(int fd, const char *file, unsigned int digest_type, size_t *digest_len);
 
 /* digestname.c */
-const char *digest_type_to_name(int digest_type);
+const char *digest_type_to_name(unsigned int digest_type);
 
 /* parse.c */
 struct sudo_nss_list;
