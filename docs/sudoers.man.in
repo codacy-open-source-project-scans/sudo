@@ -25,7 +25,7 @@
 .nr BA @BAMAN@
 .nr LC @LCMAN@
 .nr PS @PSMAN@
-.TH "SUDOERS" "@mansectform@" "April 6, 2023" "Sudo @PACKAGE_VERSION@" "File Formats Manual"
+.TH "SUDOERS" "@mansectform@" "June 20, 2023" "Sudo @PACKAGE_VERSION@" "File Formats Manual"
 .nh
 .if n .ad l
 .SH "NAME"
@@ -475,14 +475,34 @@ varies based on the operating system
 \fBsudo\fR
 is running on.
 .PP
-Other
+Other settings may influence the command environment:
+.TP 3n
+\fB\(bu\fR
 \fBsudoers\fR
-options may influence the command environment, such as
+options such as
 \fIalways_set_home\fR,
 \fIsecure_path\fR,
 \fIset_logname\fR,
+\fIset_home\fR,
 and
-\fIset_home\fR.
+\fIsetenv\fR.
+.TP 3n
+\fB\(bu\fR
+Command tags, such as
+\fRSETENV\fR
+and
+\fRNOSETENV\fR.
+Note that
+\fRSETENV\fR
+is implied if the command matched is
+\fBALL\fR.
+.TP 3n
+\fB\(bu\fR
+\fBsudo\fR
+options, such as
+\fB\-E\fR
+and
+\fB\-i\fR.
 .PP
 On systems that support PAM where the
 \fBpam_env\fR
@@ -4231,7 +4251,9 @@ By running the command in a separate pseudo-terminal, this attack is
 no longer possible.
 This flag is
 \fIon\fR
-by default.
+by default for
+\fBsudo\fR
+1.9.14 and above.
 .TP 18n
 user_command_timeouts
 If set, the user may specify a timeout on the command line.
