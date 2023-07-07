@@ -174,11 +174,11 @@ main(int argc, char *argv[], char *envp[])
 
     /* Initialize the debug subsystem. */
     if (sudo_conf_read(NULL, SUDO_CONF_DEBUG) == -1)
-	exit(EXIT_FAILURE);
+	return EXIT_FAILURE;
     sudo_debug_instance = sudo_debug_register(getprogname(),
 	NULL, NULL, sudo_conf_debug_files(getprogname()), -1);
     if (sudo_debug_instance == SUDO_DEBUG_INSTANCE_ERROR)
-	exit(EXIT_FAILURE);
+	return EXIT_FAILURE;
 
     /* Make sure we are setuid root. */
     sudo_check_suid(argc > 0 ? argv[0] : "sudo");
@@ -196,7 +196,7 @@ main(int argc, char *argv[], char *envp[])
 
     /* Fill in user_info with user name, uid, cwd, etc. */
     if ((user_info = get_user_info(&user_details)) == NULL)
-	exit(EXIT_FAILURE); /* get_user_info printed error message */
+	return EXIT_FAILURE; /* get_user_info printed error message */
 
     /* Disable core dumps if not enabled in sudo.conf. */
     if (sudo_conf_disable_coredump())
@@ -327,7 +327,7 @@ main(int argc, char *argv[], char *envp[])
     }
     sudo_debug_exit_int(__func__, __FILE__, __LINE__, sudo_debug_subsys,
 	WEXITSTATUS(status));
-    exit(WEXITSTATUS(status));
+    return WEXITSTATUS(status);
 
 access_denied:
     /* Policy/approval failure, close policy and audit plugins before exit. */
@@ -336,7 +336,7 @@ access_denied:
     audit_close(SUDO_PLUGIN_NO_STATUS, 0);
     sudo_debug_exit_int(__func__, __FILE__, __LINE__, sudo_debug_subsys,
 	EXIT_FAILURE);
-    exit(EXIT_FAILURE);
+    return EXIT_FAILURE;
 }
 
 int
@@ -437,7 +437,7 @@ get_user_groups(const char *user, struct sudo_cred *cred)
     cred->groups = NULL;
     group_source = sudo_conf_group_source();
     if (group_source != GROUP_SOURCE_DYNAMIC) {
-	int maxgroups = (int)sysconf(_SC_NGROUPS_MAX);
+	long maxgroups = sysconf(_SC_NGROUPS_MAX);
 	if (maxgroups < 0)
 	    maxgroups = NGROUPS_MAX;
 
@@ -501,10 +501,10 @@ get_user_info(struct user_details *ud)
 {
     char *cp, **info, path[PATH_MAX];
     size_t info_max = 32 + RLIM_NLIMITS;
-    unsigned int i = 0;
+    size_t i = 0, n;
     mode_t mask;
     struct passwd *pw;
-    int ttyfd, n;
+    int ttyfd;
     debug_decl(get_user_info, SUDO_DEBUG_UTIL);
 
     /*
@@ -629,7 +629,7 @@ get_user_info(struct user_details *ud)
 	goto oom;
 
     n = serialize_rlimits(&info[i + 1], info_max - (i + 1));
-    if (n == -1)
+    if (n == (size_t)-1)
 	goto oom;
     i += n;
 
@@ -643,8 +643,8 @@ get_user_info(struct user_details *ud)
 oom:
     sudo_warnx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 bad:
-    while (i--)
-	free(info[i]);
+    while (i)
+	free(info[--i]);
     free(info);
     debug_return_ptr(NULL);
 }
@@ -658,7 +658,7 @@ command_info_to_details(char * const info[], struct command_details *details)
     const char *errstr;
     char *cp;
     id_t id;
-    int i;
+    size_t i;
     debug_decl(command_info_to_details, SUDO_DEBUG_PCOMM);
 
     memset(details, 0, sizeof(*details));
@@ -692,7 +692,7 @@ command_info_to_details(char * const info[], struct command_details *details)
 
     sudo_debug_printf(SUDO_DEBUG_INFO, "command info from plugin:");
     for (i = 0; info[i] != NULL; i++) {
-	sudo_debug_printf(SUDO_DEBUG_INFO, "    %d: %s", i, info[i]);
+	sudo_debug_printf(SUDO_DEBUG_INFO, "    %zu: %s", i, info[i]);
 	switch (info[i][0]) {
 	    case 'a':
 		SET_STRING("apparmor_profile=", apparmor_profile);
@@ -900,16 +900,14 @@ command_info_to_details(char * const info[], struct command_details *details)
 #ifdef HAVE_SELINUX
     if (details->selinux_role != NULL && is_selinux_enabled() > 0) {
 	SET(details->flags, CD_RBAC_ENABLED);
-	i = selinux_getexeccon(details->selinux_role, details->selinux_type);
-	if (i != 0)
+	if (selinux_getexeccon(details->selinux_role, details->selinux_type) != 0)
 	    exit(EXIT_FAILURE);
     }
 #endif
 
 #ifdef HAVE_APPARMOR
     if (details->apparmor_profile != NULL && apparmor_is_enabled()) {
-	i = apparmor_prepare(details->apparmor_profile);
-	if (i != 0)
+	if (apparmor_prepare(details->apparmor_profile) != 0)
 	    exit(EXIT_FAILURE);
     }
 #endif
@@ -1077,7 +1075,7 @@ format_plugin_settings(struct plugin_container *plugin)
     struct sudo_debug_file *debug_file;
     struct sudo_settings *setting;
     char **plugin_settings;
-    unsigned int i = 0;
+    size_t i = 0;
     debug_decl(format_plugin_settings, SUDO_DEBUG_PCOMM);
 
     /* We update the ticket entry by default. */
@@ -1120,7 +1118,7 @@ format_plugin_settings(struct plugin_container *plugin)
 		goto bad;
 	}
     }
-    plugin_settings[i + 1] = NULL;
+    plugin_settings[++i] = NULL;
 
     /* Add to list of vectors to be garbage collected at exit. */
     if (!gc_add(GC_VECTOR, plugin_settings))
@@ -1128,8 +1126,8 @@ format_plugin_settings(struct plugin_container *plugin)
 
     debug_return_ptr(plugin_settings);
 bad:
-    while (i--)
-	free(plugin_settings[i]);
+    while (i)
+	free(plugin_settings[--i]);
     free(plugin_settings);
     debug_return_ptr(NULL);
 }
@@ -1169,12 +1167,10 @@ policy_open(void)
     sudo_debug_set_active_instance(sudo_debug_instance);
 
     if (ok != 1) {
-	if (ok == -2)
-	    usage();
-	else {
+	    if (ok == -2)
+		usage();
 	    /* XXX - audit */
 	    sudo_fatalx("%s", U_("unable to initialize policy plugin"));
-	}
     }
 
     debug_return;
@@ -1260,7 +1256,7 @@ policy_check(int argc, char * const argv[], char *env_add[],
 	    break;
 	case -2:
 	    usage();
-	    break;
+	    /* NOTREACHED */
 	}
 	debug_return_bool(false);
     }
@@ -1268,7 +1264,7 @@ policy_check(int argc, char * const argv[], char *env_add[],
 	*command_info, *run_argv, *run_envp));
 }
 
-static void
+sudo_noreturn static void
 policy_list(int argc, char * const argv[], int verbose, const char *user)
 {
     const char *errstr = NULL;
@@ -1313,7 +1309,7 @@ policy_list(int argc, char * const argv[], int verbose, const char *user)
     exit(ok != 1);
 }
 
-static void
+sudo_noreturn static void
 policy_validate(char * const argv[])
 {
     const char *errstr = NULL;
@@ -1357,7 +1353,7 @@ policy_validate(char * const argv[])
     exit(ok != 1);
 }
 
-static void
+sudo_noreturn static void
 policy_invalidate(int unlinkit)
 {
     debug_decl(policy_invalidate, SUDO_DEBUG_PCOMM);
@@ -1490,7 +1486,7 @@ iolog_open(char * const command_info[], int argc, char * const argv[],
 	    break;
 	case -2:
 	    usage();
-	    break;
+	    /* NOTREACHED */
 	default:
 	    sudo_warnx(U_("error initializing I/O plugin %s"),
 		plugin->name);
@@ -1641,7 +1637,7 @@ audit_open(void)
 	    break;
 	case -2:
 	    usage();
-	    break;
+	    /* NOTREACHED */
 	default:
 	    /* TODO: pass error message to other audit plugins */
 	    sudo_fatalx(U_("error initializing audit plugin %s"),
@@ -1854,7 +1850,7 @@ approval_open_int(struct plugin_container *plugin)
 	break;
     case -2:
 	usage();
-	break;
+	/* NOTREACHED */
     default:
 	/* XXX - audit */
 	sudo_fatalx(U_("error initializing approval plugin %s"),
@@ -1942,7 +1938,6 @@ approval_check(char * const command_info[], char * const run_argv[],
 	    break;
 	case -2:
 	    usage();
-	    break;
 	}
 
 	/* Close approval plugin now that errstr has been consumed. */

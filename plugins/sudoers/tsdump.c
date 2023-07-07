@@ -81,7 +81,7 @@ main(int argc, char *argv[])
 
     /* Initialize the debug subsystem. */
     if (sudo_conf_read(NULL, SUDO_CONF_DEBUG) == -1)
-	exit(EXIT_FAILURE);
+	return EXIT_FAILURE;
     sudoers_debug_register(getprogname(), sudo_conf_debug_files(getprogname()));
 
     while ((ch = getopt(argc, argv, "f:u:")) != -1) {
@@ -302,7 +302,7 @@ dump_entry(struct timestamp_entry *entry, off_t pos)
     debug_return;
 }
 
-static void
+sudo_noreturn static void
 usage(void)
 {
     fprintf(stderr, "usage: %s [-f timestamp_file] | [-u username]\n",

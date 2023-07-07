@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: ISC
  *
- * Copyright (c) 2019-2022 Todd C. Miller <Todd.Miller@sudo.ws>
+ * Copyright (c) 2019-2023 Todd C. Miller <Todd.Miller@sudo.ws>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -141,7 +141,7 @@ connection_closure_free(struct connection_closure *closure)
 	free(closure->read_buf.data);
 	while ((buf = TAILQ_FIRST(&closure->write_bufs)) != NULL) {
 	    sudo_debug_printf(SUDO_DEBUG_WARN|SUDO_DEBUG_LINENO,
-		"discarding write buffer %p, len %u", buf, buf->len - buf->off);
+		"discarding write buffer %p, len %zu", buf, buf->len - buf->off);
 	    TAILQ_REMOVE(&closure->write_bufs, buf, entries);
 	    free(buf->data);
 	    free(buf);
@@ -302,7 +302,7 @@ get_free_buf(size_t len, struct connection_closure *closure)
     }
 
     if (len > buf->size) {
-	const unsigned int new_size = sudo_pow2_roundup(len);
+	const size_t new_size = sudo_pow2_roundup(len);
 	if (new_size < len) {
 	    /* overflow */
 	    errno = ENOMEM;
@@ -933,7 +933,7 @@ server_msg_cb(int fd, int what, void *v)
         goto finished;
     }
 
-    sudo_debug_printf(SUDO_DEBUG_INFO, "%s: sending %u bytes to client (%s)",
+    sudo_debug_printf(SUDO_DEBUG_INFO, "%s: sending %zu bytes to client (%s)",
 	__func__, buf->len - buf->off, closure->ipaddr);
 
 #if defined(HAVE_OPENSSL)
@@ -983,7 +983,7 @@ server_msg_cb(int fd, int what, void *v)
     if (buf->off == buf->len) {
 	/* sent entire message, move buf to free list */
 	sudo_debug_printf(SUDO_DEBUG_INFO,
-	    "%s: finished sending %u bytes to client", __func__, buf->len);
+	    "%s: finished sending %zu bytes to client", __func__, buf->len);
 	buf->off = 0;
 	buf->len = 0;
 	TAILQ_REMOVE(&closure->write_bufs, buf, entries);
@@ -1891,19 +1891,24 @@ daemonize(bool nofork)
 }
 
 static void
-usage(bool fatal)
+display_usage(FILE *fp)
 {
-    fprintf(stderr, "usage: %s [-n] [-f conf_file] [-R percentage]\n",
+    fprintf(fp, "usage: %s [-n] [-f conf_file] [-R percentage]\n",
 	getprogname());
-    if (fatal)
-	exit(EXIT_FAILURE);
 }
 
-static void
+sudo_noreturn static void
+usage(void)
+{
+    display_usage(stderr);
+    exit(EXIT_FAILURE);
+}
+
+sudo_noreturn static void
 help(void)
 {
     printf("%s - %s\n\n", getprogname(), _("sudo log server"));
-    usage(false);
+    display_usage(stdout);
     printf("\n%s\n", _("Options:"));
     printf("  -f, --file            %s\n",
 	_("path to configuration file"));
@@ -1959,7 +1964,7 @@ main(int argc, char *argv[])
 
     /* Read sudo.conf and initialize the debug subsystem. */
     if (sudo_conf_read(NULL, SUDO_CONF_DEBUG) == -1)
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     logsrvd_debug_instance = sudo_debug_register(getprogname(), NULL, NULL,
         sudo_conf_debug_files(getprogname()), -1);
 
@@ -1973,7 +1978,7 @@ main(int argc, char *argv[])
 	    break;
 	case 'h':
 	    help();
-	    break;
+	    /* NOTREACHED */
 	case 'n':
 	    nofork = true;
 	    break;
@@ -1987,13 +1992,13 @@ main(int argc, char *argv[])
 		PACKAGE_VERSION);
 	    return 0;
 	default:
-	    usage(true);
+	    usage();
 	}
     }
 
     /* Read sudo_logsrvd.conf */
     if (!logsrvd_conf_read(conf_file))
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
 
     if ((evbase = sudo_ev_base_alloc()) == NULL)
 	sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
@@ -2017,5 +2022,5 @@ main(int argc, char *argv[])
 	unlink(logsrvd_conf_pid_file());
     logsrvd_conf_cleanup();
 
-    debug_return_int(1);
+    debug_return_int(0);
 }

@@ -553,10 +553,6 @@ sudoers_policy_deserialize_info(void *v, struct defaults_list *defaults)
 	if ((user_cwd = strdup("unknown")) == NULL)
 	    goto oom;
     }
-    if (user_runcwd == NULL) {
-	/* Unlike user_cwd, user_runcwd is not free()d. */
-	user_runcwd = user_cwd;
-    }
     if (user_tty == NULL) {
 	if ((user_tty = strdup("unknown")) == NULL)
 	    goto oom;
@@ -656,7 +652,7 @@ sudoers_policy_store_result(bool accepted, char *argv[], char *envp[],
     mode_t cmnd_umask, char *iolog_path, void *v)
 {
     struct sudoers_exec_args *exec_args = v;
-    int info_len = 0;
+    unsigned int info_len = 0;
     debug_decl(sudoers_policy_store_result, SUDOERS_DEBUG_PLUGIN);
 
     if (exec_args == NULL)
@@ -749,7 +745,7 @@ sudoers_policy_store_result(bool accepted, char *argv[], char *envp[],
 	}
     }
     if (def_runcwd && strcmp(def_runcwd, "*") != 0) {
-	/* Set cwd to explicit value in sudoers. */
+	/* Set cwd to explicit value (sudoers or user-specified). */
 	if (!expand_tilde(&def_runcwd, runas_pw->pw_name)) {
 	    sudo_warnx(U_("invalid working directory: %s"), def_runcwd);
 	    goto bad;
@@ -1051,8 +1047,8 @@ oom:
 bad:
     free(audit_msg);
     audit_msg = NULL;
-    while (info_len--)
-	free(command_info[info_len]);
+    while (info_len)
+	free(command_info[--info_len]);
     free(command_info);
     command_info = NULL;
     debug_return_bool(false);

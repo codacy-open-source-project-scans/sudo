@@ -1426,9 +1426,6 @@ __grow_type_table(unsigned char **typetable, int *tablesize)
 	unsigned char *oldtable = *typetable;
 	int newsize = *tablesize * 2;
 
-	if (newsize < sysconf(_SC_PAGESIZE))
-		newsize = sysconf(_SC_PAGESIZE);
-
 	if (*tablesize == STATIC_ARG_TBL_SIZE) {
 		*typetable = sudo_mmap_alloc(newsize);
 		if (*typetable == NULL)

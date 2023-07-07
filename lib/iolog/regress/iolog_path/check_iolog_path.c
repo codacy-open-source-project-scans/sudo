@@ -44,7 +44,7 @@ static struct iolog_escape_data {
 
 sudo_dso_public int main(int argc, char *argv[]);
 
-static void
+sudo_noreturn static void
 usage(void)
 {
     fprintf(stderr, "usage: %s datafile\n", getprogname());
@@ -133,7 +133,7 @@ do_check(char *dir_in, char *file_in, char *tdir_out, char *tfile_out)
     int error = 0;
     struct tm tm;
     time_t now;
-    int len;
+    size_t len;
 
     /*
      * Expand any strftime(3) escapes

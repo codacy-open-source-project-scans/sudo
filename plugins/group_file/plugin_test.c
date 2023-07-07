@@ -21,15 +21,16 @@
  * PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
+#include <config.h>
 #include <ctype.h>
 #include <dlfcn.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "sudo_plugin.h"
 
@@ -200,7 +201,7 @@ main(int argc, char *argv[])
 
     if (group_plugin_load(plugin) != 1) {
 	fprintf(stderr, "unable to load plugin: %s\n", plugin);
-	exit(EXIT_FAILURE);
+	return EXIT_FAILURE;
     }
 
     for (i = 0; argv[i] != NULL; i++) {
@@ -215,6 +216,6 @@ main(int argc, char *argv[])
     }
     group_plugin_unload();
 
-    exit(EXIT_SUCCESS);
+    return EXIT_SUCCESS;
 }
 

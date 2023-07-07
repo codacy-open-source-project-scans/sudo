@@ -23,10 +23,11 @@
 
 #include <config.h>
 
+#include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 #ifdef HAVE_STDBOOL_H
 # include <stdbool.h>
 #else
@@ -90,30 +91,28 @@ sudo_parseln_v2(char **bufp, size_t *bufsizep, unsigned int *lineno, FILE *fp, i
 	    len--;
 
 	if (*bufp == NULL || total + len >= *bufsizep) {
-	    void *tmp;
-	    size_t size = total + len + 1;
+	    const size_t size = total + len + 1;
+	    const size_t newsize = sudo_pow2_roundup(size);
+	    void *newbuf;
 
-	    if (size < 64) {
-		size = 64;
-	    } else if (size <= 0x80000000) {
-		/* Round up to next highest power of two. */
-		size--;
-		size |= size >> 1;
-		size |= size >> 2;
-		size |= size >> 4;
-		size |= size >> 8;
-		size |= size >> 16;
-		size++;
-	    }
-	    if ((tmp = realloc(*bufp, size)) == NULL) {
+	    if (newsize < size) {
+		/* overflow */
+		errno = ENOMEM;
 		sudo_debug_printf(SUDO_DEBUG_ERROR|SUDO_DEBUG_LINENO,
 		    "unable to allocate memory");
 		len = -1;
 		total = 0;
 		break;
 	    }
-	    *bufp = tmp;
-	    *bufsizep = size;
+	    if ((newbuf = realloc(*bufp, newsize)) == NULL) {
+		sudo_debug_printf(SUDO_DEBUG_ERROR|SUDO_DEBUG_LINENO,
+		    "unable to allocate memory");
+		len = -1;
+		total = 0;
+		break;
+	    }
+	    *bufp = newbuf;
+	    *bufsizep = newsize;
 	}
 	memcpy(*bufp + total, cp, len + 1);
 	total += len;

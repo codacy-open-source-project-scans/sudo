@@ -49,6 +49,7 @@
 #include "sudo_lbuf.h"
 #include "redblack.h"
 #include "cvtsudoers.h"
+#include "testsudoers_pwutil.h"
 #include "tsgetgrpw.h"
 #include <gram.h>
 
@@ -195,7 +196,7 @@ main(int argc, char *argv[])
 	    break;
 	case 'h':
 	    help();
-	    break;
+	    /* NOTREACHED */
 	case 'i':
 	    free(conf->input_format);
 	    conf->input_format = strdup(optarg);
@@ -258,6 +259,7 @@ main(int argc, char *argv[])
 	    break;
 	default:
 	    usage();
+	    /* NOTREACHED */
 	}
     }
     argc -= optind;
@@ -1506,7 +1508,7 @@ done:
 }
 
 static void
-print_usage(FILE *fp)
+display_usage(FILE *fp)
 {
     (void) fprintf(fp, "usage: %s [-ehMpV] [-b dn] "
 	"[-c conf_file ] [-d deftypes] [-f output_format] [-i input_format] "
@@ -1514,18 +1516,18 @@ print_usage(FILE *fp)
 	"[-P padding] [-s sections] [input_file]\n", getprogname());
 }
 
-static void
+sudo_noreturn static void
 usage(void)
 {
-    print_usage(stderr);
+    display_usage(stderr);
     exit(EXIT_FAILURE);
 }
 
-static void
+sudo_noreturn static void
 help(void)
 {
     (void) printf(_("%s - convert between sudoers file formats\n\n"), getprogname());
-    print_usage(stdout);
+    display_usage(stdout);
     (void) puts(_("\nOptions:\n"
 	"  -b, --base=dn              the base DN for sudo LDAP queries\n"
 	"  -c, --config=conf_file     the path to the configuration file\n"

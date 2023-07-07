@@ -109,6 +109,9 @@
 /* Define to 1 if you have the 'close_range' function. */
 #undef HAVE_CLOSE_RANGE
 
+/* Define to 1 if you have the <crt_externs.h> header file. */
+#undef HAVE_CRT_EXTERNS_H
+
 /* Define to 1 if you have the 'crypt' function. */
 #undef HAVE_CRYPT
 
@@ -1098,6 +1101,9 @@
 /* Define to 1 if you have the '_innetgr' function. */
 #undef HAVE__INNETGR
 
+/* Define to 1 if you have the '_NSGetEnviron' function. */
+#undef HAVE__NSGETENVIRON
+
 /* Define to 1 if you have the '_nss_initf_group' function. */
 #undef HAVE__NSS_INITF_GROUP
 
@@ -1106,6 +1112,12 @@
 
 /* Define to 1 if you have the '_ttyname_dev' function. */
 #undef HAVE__TTYNAME_DEV
+
+/* Define to 1 if you have the '__builtin_clz' built-in function */
+#undef HAVE___BUILTIN_CLZ
+
+/* Define to 1 if you have the '__builtin_clzl' built-in function */
+#undef HAVE___BUILTIN_CLZL
 
 /* Define to 1 if the compiler supports the C99 __func__ variable. */
 #undef HAVE___FUNC__

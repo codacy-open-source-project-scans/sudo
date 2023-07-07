@@ -346,17 +346,18 @@ testsudoers_getgrgid(gid_t gid)
  * Copied from getgrouplist.c
  */
 int
-testsudoers_getgrouplist2_v1(const char *name, GETGROUPS_T basegid,
+testsudoers_getgrouplist2(const char *name, GETGROUPS_T basegid,
     GETGROUPS_T **groupsp, int *ngroupsp)
 {
     GETGROUPS_T *groups = *groupsp;
-    int i, grpsize, ngroups = 1;
+    int i, ngroups = 1;
+    long grpsize;
     int ret = -1;
     struct group *grp;
 
     if (groups == NULL) {
 	/* Dynamically-sized group vector. */
-	grpsize = (int)sysconf(_SC_NGROUPS_MAX);
+	grpsize = sysconf(_SC_NGROUPS_MAX);
 	if (grpsize < 0)
 	    grpsize = NGROUPS_MAX;
 	groups = reallocarray(NULL, grpsize, 4 * sizeof(*groups));

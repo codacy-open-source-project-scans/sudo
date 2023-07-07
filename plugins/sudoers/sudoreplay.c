@@ -225,7 +225,7 @@ main(int argc, char *argv[])
 
     /* Read sudo.conf and initialize the debug subsystem. */
     if (sudo_conf_read(NULL, SUDO_CONF_DEBUG) == -1)
-	exit(EXIT_FAILURE);
+	return EXIT_FAILURE;
     sudo_debug_register(getprogname(), NULL, NULL,
 	sudo_conf_debug_files(getprogname()), -1);
 
@@ -1479,7 +1479,7 @@ find_sessions(const char *dir, regex_t *re, const char *user, const char *tty)
     struct stat sb;
     struct sudo_lbuf lbuf;
     size_t sdlen, sessions_len = 0, sessions_size = 0;
-    unsigned int i;
+    size_t i;
     int len;
     char pathbuf[PATH_MAX], **sessions = NULL;
 #ifdef HAVE_STRUCT_DIRENT_D_TYPE
@@ -1673,7 +1673,7 @@ read_keyboard(int fd, int what, void *v)
 }
 
 static void
-print_usage(FILE *fp)
+display_usage(FILE *fp)
 {
     fprintf(fp, _("usage: %s [-hnRS] [-d dir] [-m num] [-s num] ID\n"),
 	getprogname());
@@ -1681,18 +1681,18 @@ print_usage(FILE *fp)
 	getprogname());
 }
 
-static void
+sudo_noreturn static void
 usage(void)
 {
-    print_usage(stderr);
+    display_usage(stderr);
     exit(EXIT_FAILURE);
 }
 
-static void
+sudo_noreturn static void
 help(void)
 {
     (void) printf(_("%s - replay sudo session logs\n\n"), getprogname());
-    print_usage(stdout);
+    display_usage(stdout);
     (void) puts(_("\nOptions:\n"
 	"  -d, --directory=dir    specify directory for session logs\n"
 	"  -f, --filter=filter    specify which I/O type(s) to display\n"

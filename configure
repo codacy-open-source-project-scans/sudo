@@ -18635,6 +18635,24 @@ fi
 
 done
 
+		# We cannot directly access environ from a shared object
+		       for ac_header in crt_externs.h
+do :
+  ac_fn_c_check_header_compile "$LINENO" "crt_externs.h" "ac_cv_header_crt_externs_h" "$ac_includes_default"
+if test "x$ac_cv_header_crt_externs_h" = xyes
+then :
+  printf "%s\n" "#define HAVE_CRT_EXTERNS_H 1" >>confdefs.h
+ ac_fn_c_check_func "$LINENO" "_NSGetEnviron" "ac_cv_func__NSGetEnviron"
+if test "x$ac_cv_func__NSGetEnviron" = xyes
+then :
+  printf "%s\n" "#define HAVE__NSGETENVIRON 1" >>confdefs.h
+
+fi
+
+fi
+
+done
+
 		# We need to force a flat namespace to make libc
 		# symbol hooking work like it does on ELF.
 		{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether the linker accepts -Wl,-force_flat_namespace" >&5
@@ -22747,6 +22765,100 @@ esac
 fi
 
 done
+
+
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for __builtin_clz" >&5
+printf %s "checking for __builtin_clz... " >&6; }
+if test ${ax_cv_have___builtin_clz+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+        cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+            __builtin_clz(0)
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  ax_cv_have___builtin_clz=yes
+else case e in #(
+  e) ax_cv_have___builtin_clz=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+     ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_have___builtin_clz" >&5
+printf "%s\n" "$ax_cv_have___builtin_clz" >&6; }
+
+    if test yes = $ax_cv_have___builtin_clz
+then :
+
+printf "%s\n" "#define HAVE___BUILTIN_CLZ 1" >>confdefs.h
+
+fi
+
+
+
+
+
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for __builtin_clzl" >&5
+printf %s "checking for __builtin_clzl... " >&6; }
+if test ${ax_cv_have___builtin_clzl+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+        cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+            __builtin_clzl(0)
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  ax_cv_have___builtin_clzl=yes
+else case e in #(
+  e) ax_cv_have___builtin_clzl=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+     ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_have___builtin_clzl" >&5
+printf "%s\n" "$ax_cv_have___builtin_clzl" >&6; }
+
+    if test yes = $ax_cv_have___builtin_clzl
+then :
+
+printf "%s\n" "#define HAVE___BUILTIN_CLZL 1" >>confdefs.h
+
+fi
+
+
+
 
 utmp_style=LEGACY
 

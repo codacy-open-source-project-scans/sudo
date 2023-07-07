@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: ISC
  *
- * Copyright (c) 1996, 1998-2005, 2007-2022
+ * Copyright (c) 1996, 1998-2005, 2007-2023
  *	Todd C. Miller <Todd.Miller@sudo.ws>
  *
  * Permission to use, copy, modify, and distribute this software for any
@@ -41,6 +41,7 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include "testsudoers_pwutil.h"
 #include "tsgetgrpw.h"
 #include "sudoers.h"
 #include "interfaces.h"
@@ -60,19 +61,17 @@ enum sudoers_formats {
 /*
  * Function Prototypes
  */
-static void dump_sudoers(struct sudo_lbuf *lbuf);
+static void dump_sudoers(void);
 static void set_runaspw(const char *);
 static void set_runasgr(const char *);
 static bool cb_runas_default(const char *file, int line, int column, const union sudo_defs_val *, int);
 static int testsudoers_error(const char *msg);
 static int testsudoers_output(const char *buf);
 sudo_noreturn static void usage(void);
-
-/* testsudoers_pwutil.c */
-extern struct cache_item *testsudoers_make_gritem(gid_t gid, const char *group);
-extern struct cache_item *testsudoers_make_grlist_item(const struct passwd *pw, char * const *groups);
-extern struct cache_item *testsudoers_make_gidlist_item(const struct passwd *pw, char * const *gids, unsigned int type);
-extern struct cache_item *testsudoers_make_pwitem(uid_t uid, const char *user);
+static void cb_userspec(struct userspec *us, int user_match);
+static void cb_privilege(struct privilege *priv, int host_match);
+static void cb_cmndspec(struct cmndspec *cs, int date_match, int runas_match, int cmnd_match);
+static int testsudoers_query(const struct sudo_nss *nss, struct passwd *pw);
 
 /* gram.y */
 extern int (*trace_print)(const char *msg);
@@ -84,6 +83,7 @@ struct sudo_user sudo_user;
 struct passwd *list_pw;
 static const char *orig_cmnd;
 static char *runas_group, *runas_user;
+int sudo_mode = MODE_RUN;
 
 #if defined(SUDO_DEVEL) && defined(__OpenBSD__)
 extern char *malloc_options;
@@ -98,15 +98,17 @@ int
 main(int argc, char *argv[])
 {
     struct sudoers_parser_config sudoers_conf = SUDOERS_PARSER_CONFIG_INITIALIZER;
+    struct sudo_nss_list snl = TAILQ_HEAD_INITIALIZER(snl);
+    struct sudoers_lookup_callbacks callbacks =
+	{ cb_userspec, cb_privilege, cb_cmndspec };
     enum sudoers_formats input_format = format_sudoers;
-    struct cmndspec *cs;
-    struct privilege *priv;
-    struct userspec *us;
+    struct sudo_nss testsudoers_nss;
     char *p, *grfile, *pwfile;
     const char *errstr;
-    int match, host_match, runas_match, cmnd_match;
     int ch, dflag, exitcode = EXIT_FAILURE;
-    struct sudo_lbuf lbuf;
+    int validated, status = FOUND;
+    char cwdbuf[PATH_MAX];
+    time_t now;
     id_t id;
     debug_decl(main, SUDOERS_DEBUG_MAIN);
 
@@ -124,9 +126,7 @@ main(int argc, char *argv[])
     sudo_warn_set_locale_func(sudoers_warn_setlocale);
     bindtextdomain("sudoers", LOCALEDIR); /* XXX - should have own domain */
     textdomain("sudoers");
-
-    /* No word wrap on output. */
-    sudo_lbuf_init(&lbuf, testsudoers_output, 0, NULL, 0);
+    time(&now);
 
     /* Initialize the debug subsystem. */
     if (sudo_conf_read(NULL, SUDO_CONF_DEBUG) == -1)
@@ -136,8 +136,11 @@ main(int argc, char *argv[])
 
     dflag = 0;
     grfile = pwfile = NULL;
-    while ((ch = getopt(argc, argv, "+dg:G:h:i:P:p:tu:U:")) != -1) {
+    while ((ch = getopt(argc, argv, "+D:dg:G:h:i:P:p:R:T:tu:U:")) != -1) {
 	switch (ch) {
+	    case 'D':
+		user_runcwd = optarg;
+		break;
 	    case 'd':
 		dflag = 1;
 		break;
@@ -170,6 +173,14 @@ main(int argc, char *argv[])
 	    case 'P':
 		grfile = optarg;
 		break;
+	    case 'T':
+		now = parse_gentime(optarg);
+		if (now == -1)
+		    sudo_fatalx("invalid time: %s", optarg);
+		break;
+	    case 'R':
+		user_runchroot = optarg;
+		break;
 	    case 't':
 		trace_print = testsudoers_error;
 		break;
@@ -185,7 +196,7 @@ main(int argc, char *argv[])
 		break;
 	    default:
 		usage();
-		break;
+		/* NOTREACHED */
 	}
     }
     argc -= optind;
@@ -219,6 +230,10 @@ main(int argc, char *argv[])
     if (user_cmnd == NULL)
 	sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
     user_base = sudo_basename(user_cmnd);
+
+    if (getcwd(cwdbuf, sizeof(cwdbuf)) == NULL)
+	strlcpy(cwdbuf, "/", sizeof(cwdbuf));
+    user_cwd = cwdbuf;
 
     if ((sudo_user.pw = sudo_getpwnam(user_name)) == NULL)
 	sudo_fatalx(U_("unknown user %s"), user_name);
@@ -275,6 +290,7 @@ main(int argc, char *argv[])
     if (get_net_ifs(&p) > 0) {
 	if (!set_interfaces(p))
 	    sudo_fatal("%s", U_("unable to parse network address list"));
+	free(p);
     }
 
     /* Initialize the parser and set sudoers filename to "sudoers". */
@@ -317,46 +333,43 @@ main(int argc, char *argv[])
 
     if (dflag) {
 	(void) putchar('\n');
-	dump_sudoers(&lbuf);
+	dump_sudoers();
 	if (argc < 2) {
 	    exitcode = parse_error ? 1 : 0;
 	    goto done;
 	}
     }
 
-    /* This loop must match the one in sudo_file_lookup() */
+    /* Fake up a minimal sudo nss list with the parsed policy. */
+    TAILQ_INSERT_TAIL(&snl, &testsudoers_nss, entries);
+    testsudoers_nss.query = testsudoers_query;
+    testsudoers_nss.parse_tree = &parsed_policy;
+
     printf("\nEntries for user %s:\n", user_name);
-    match = UNSPEC;
-    TAILQ_FOREACH_REVERSE(us, &parsed_policy.userspecs, userspec_list, entries) {
-	if (userlist_matches(&parsed_policy, sudo_user.pw, &us->users) != ALLOW)
-	    continue;
-	TAILQ_FOREACH_REVERSE(priv, &us->privileges, privilege_list, entries) {
-	    sudo_lbuf_append(&lbuf, "\n");
-	    sudoers_format_privilege(&lbuf, &parsed_policy, priv, false);
-	    sudo_lbuf_print(&lbuf);
-	    host_match = hostlist_matches(&parsed_policy, sudo_user.pw,
-		&priv->hostlist);
-	    if (host_match == ALLOW) {
-		puts("\thost  matched");
-		TAILQ_FOREACH_REVERSE(cs, &priv->cmndlist, cmndspec_list, entries) {
-		    runas_match = runaslist_matches(&parsed_policy,
-			cs->runasuserlist, cs->runasgrouplist, NULL, NULL);
-		    if (runas_match == ALLOW) {
-			puts("\trunas matched");
-			cmnd_match = cmnd_matches(&parsed_policy, cs->cmnd,
-			    cs->runchroot, NULL);
-			if (cmnd_match != UNSPEC)
-			    match = cmnd_match;
-			printf("\tcmnd  %s\n", match == ALLOW ? "allowed" :
-			    match == DENY ? "denied" : "unmatched");
-		    }
-		}
-	    } else
-		puts(U_("\thost  unmatched"));
+    validated = sudoers_lookup(&snl, sudo_user.pw, now, &callbacks, &status,
+	false);
+
+    /* Validate user-specified chroot or cwd (if any) and runas user shell. */
+    if (ISSET(validated, VALIDATE_SUCCESS)) {
+	if (!check_user_shell(runas_pw)) {
+	    printf(U_("\nInvalid shell for user %s: %s\n"),
+		runas_pw->pw_name, runas_pw->pw_shell);
+	    CLR(validated, VALIDATE_SUCCESS);
+	    SET(validated, VALIDATE_FAILURE);
+	}
+	if (check_user_runchroot() != true) {
+	    printf("\nUser %s is not allowed to change root directory to %s\n",
+		user_name, user_runchroot);
+	    CLR(validated, VALIDATE_SUCCESS);
+	    SET(validated, VALIDATE_FAILURE);
+	}
+	if (check_user_runcwd() != true) {
+	    printf("\nUser %s is not allowed to change directory to %s\n",
+		user_name, user_runcwd);
+	    CLR(validated, VALIDATE_SUCCESS);
+	    SET(validated, VALIDATE_FAILURE);
 	}
     }
-    puts(match == ALLOW ? U_("\nCommand allowed") :
-	match == DENY ?  U_("\nCommand denied") :  U_("\nCommand unmatched"));
 
     /*
      * Exit codes:
@@ -365,13 +378,25 @@ main(int argc, char *argv[])
      *	2 - command not matched
      *	3 - command denied
      */
-    exitcode = parse_error ? 1 : (match == ALLOW ? 0 : match + 3);
+    if (parse_error || ISSET(validated, VALIDATE_ERROR)) {
+	puts(U_("\nParse error"));
+	exitcode = 1;
+    } else if (ISSET(validated, VALIDATE_SUCCESS)) {
+	puts(U_("\nCommand allowed"));
+	exitcode = 0;
+    } else if (ISSET(validated, VALIDATE_FAILURE)) {
+	puts(U_("\nCommand denied"));
+	exitcode = 3;
+    } else {
+	puts(U_("\nCommand unmatched"));
+	exitcode = 2;
+    }
+
 done:
-    sudo_lbuf_destroy(&lbuf);
     sudo_freepwcache();
     sudo_freegrcache();
     sudo_debug_exit_int(__func__, __FILE__, __LINE__, sudo_debug_subsys, exitcode);
-    exit(exitcode);
+    return exitcode;
 }
 
 static void
@@ -422,6 +447,20 @@ set_runasgr(const char *group)
     debug_return;
 }
 
+bool
+cb_log_input(const char *file, int line, int column,
+    const union sudo_defs_val *sd_un, int op)
+{
+    return true;
+}
+
+bool
+cb_log_output(const char *file, int line, int column,
+    const union sudo_defs_val *sd_un, int op)
+{
+    return true;
+}
+
 /* 
  * Callback for runas_default sudoers setting.
  */
@@ -432,6 +471,12 @@ cb_runas_default(const char *file, int line, int column,
     /* Only reset runaspw if user didn't specify one. */
     if (!runas_user && !runas_group)
         set_runaspw(sd_un->str);
+    return true;
+}
+
+bool
+sudo_nss_can_continue(const struct sudo_nss *nss, int match)
+{
     return true;
 }
 
@@ -542,6 +587,50 @@ set_cmnd_path(const char *runchroot)
     return FOUND;
 }
 
+static void
+cb_userspec(struct userspec *us, int user_match)
+{
+    return;
+}
+
+static void
+cb_privilege(struct privilege *priv, int host_match)
+{
+    struct sudo_lbuf lbuf;
+
+    /* No word wrap on output. */
+    sudo_lbuf_init(&lbuf, testsudoers_output, 0, NULL, 0);
+    sudo_lbuf_append(&lbuf, "\n");
+    sudoers_format_privilege(&lbuf, &parsed_policy, priv, false);
+    sudo_lbuf_print(&lbuf);
+    sudo_lbuf_destroy(&lbuf);
+
+    printf("\thost  %s\n", host_match == ALLOW ? "allowed" :
+	host_match == DENY ? "denied" : "unmatched");
+}
+
+static void
+cb_cmndspec(struct cmndspec *cs, int date_match, int runas_match, int cmnd_match)
+{
+    if (date_match != UNSPEC)
+	printf("\tdate  %s\n", date_match == ALLOW ? "allowed" : "denied");
+    if (date_match != DENY) {
+	printf("\trunas %s\n", runas_match == ALLOW ? "allowed" :
+	    runas_match == DENY ? "denied" : "unmatched");
+	if (runas_match == ALLOW) {
+	    printf("\tcmnd  %s\n", cmnd_match == ALLOW ? "allowed" :
+		cmnd_match == DENY ? "denied" : "unmatched");
+	}
+    }
+}
+
+static int
+testsudoers_query(const struct sudo_nss *nss, struct passwd *pw)
+{
+    /* Nothing to do. */
+    return 0;
+}
+
 static bool
 print_defaults(struct sudo_lbuf *lbuf)
 {
@@ -584,38 +673,43 @@ print_aliases(struct sudo_lbuf *lbuf)
 }
 
 static void
-dump_sudoers(struct sudo_lbuf *lbuf)
+dump_sudoers(void)
 {
+    struct sudo_lbuf lbuf;
     debug_decl(dump_sudoers, SUDOERS_DEBUG_UTIL);
 
+    /* No word wrap on output. */
+    sudo_lbuf_init(&lbuf, testsudoers_output, 0, NULL, 0);
+
     /* Print Defaults */
-    if (!print_defaults(lbuf))
+    if (!print_defaults(&lbuf))
 	goto done;
-    if (lbuf->len > 0) {
-	sudo_lbuf_print(lbuf);
-	sudo_lbuf_append(lbuf, "\n");
+    if (lbuf.len > 0) {
+	sudo_lbuf_print(&lbuf);
+	sudo_lbuf_append(&lbuf, "\n");
     }
 
     /* Print Aliases */
-    if (!print_aliases(lbuf))
+    if (!print_aliases(&lbuf))
 	goto done;
-    if (lbuf->len > 1) {
-	sudo_lbuf_print(lbuf);
-	sudo_lbuf_append(lbuf, "\n");
+    if (lbuf.len > 1) {
+	sudo_lbuf_print(&lbuf);
+	sudo_lbuf_append(&lbuf, "\n");
     }
 
     /* Print User_Specs */
-    if (!sudoers_format_userspecs(lbuf, &parsed_policy, NULL, false, true))
+    if (!sudoers_format_userspecs(&lbuf, &parsed_policy, NULL, false, true))
 	goto done;
-    if (lbuf->len > 1) {
-	sudo_lbuf_print(lbuf);
+    if (lbuf.len > 1) {
+	sudo_lbuf_print(&lbuf);
     }
 
 done:
-    if (sudo_lbuf_error(lbuf)) {
+    if (sudo_lbuf_error(&lbuf)) {
 	if (errno == ENOMEM)
 	    sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
     }
+    sudo_lbuf_destroy(&lbuf);
 
     debug_return;
 }
@@ -632,7 +726,7 @@ testsudoers_error(const char *buf)
     return fputs(buf, stderr);
 }
 
-static void
+sudo_noreturn static void
 usage(void)
 {
     (void) fprintf(stderr, "usage: %s [-dt] [-G sudoers_gid] [-g group] [-h host] [-i input_format] [-P grfile] [-p pwfile] [-U sudoers_uid] [-u user] <user> <command> [args]\n", getprogname());

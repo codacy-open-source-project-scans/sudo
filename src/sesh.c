@@ -148,7 +148,7 @@ main(int argc, char *argv[], char *envp[])
 	    break;
 	default:
 	    usage();
-	    break;
+	    /* NOTREACHED */
 	}
     }
     argc -= optind;
@@ -158,7 +158,7 @@ main(int argc, char *argv[], char *envp[])
 
     /* Read sudo.conf and initialize the debug subsystem. */
     if (sudo_conf_read(NULL, SUDO_CONF_DEBUG) == -1)
-	exit(EXIT_FAILURE);
+	return EXIT_FAILURE;
     sudo_debug_register(getprogname(), NULL, NULL,
 	sudo_conf_debug_files(getprogname()), -1);
 
@@ -198,7 +198,7 @@ main(int argc, char *argv[], char *envp[])
 	if (rundir != NULL && chdir(rundir) == -1) {
 	    sudo_warnx(U_("unable to change directory to %s"), rundir);
 	    if (!ISSET(flags, CD_CWD_OPTIONAL))
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 
 	/* Make a copy of the command to execute. */

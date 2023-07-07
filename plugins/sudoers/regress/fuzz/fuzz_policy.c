@@ -92,7 +92,7 @@ struct dynamic_array {
 static void
 free_strvec(char **vec)
 {
-    int i;
+    size_t i;
 
     for (i = 0; vec[i] != NULL; i++)
 	free(vec[i]);
@@ -713,6 +713,20 @@ check_user(int validated, int mode)
 }
 
 /* STUB */
+int
+check_user_runchroot(void)
+{
+    return true;
+}
+
+/* STUB */
+int
+check_user_runcwd(void)
+{
+    return true;
+}
+
+/* STUB */
 bool
 check_user_shell(const struct passwd *pw)
 {
@@ -792,8 +806,8 @@ audit_failure(char *const argv[], char const *const fmt, ...)
 
 /* STUB */
 int
-sudoers_lookup(struct sudo_nss_list *snl, struct passwd *pw, int *cmnd_status,
-    int pwflag)
+sudoers_lookup(struct sudo_nss_list *snl, struct passwd *pw, time_t now,
+    struct sudoers_lookup_callbacks *callbacks, int *cmnd_status, int pwflag)
 {
     return VALIDATE_SUCCESS;
 }

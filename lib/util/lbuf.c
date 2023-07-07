@@ -23,10 +23,11 @@
 
 #include <config.h>
 
-#include <stdlib.h>
-#include <string.h>
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "sudo_compat.h"
 #include "sudo_debug.h"
@@ -79,10 +80,10 @@ sudo_lbuf_expand(struct sudo_lbuf *lbuf, unsigned int extra)
     }
 
     if (lbuf->len + extra + 1 > lbuf->size) {
-	unsigned int new_size = sudo_pow2_roundup(lbuf->len + extra + 1);
+	size_t new_size = sudo_pow2_roundup(lbuf->len + extra + 1);
 	char *new_buf;
 
-	if (new_size < lbuf->size) {
+	if (new_size > UINT_MAX || new_size < lbuf->size) {
 	    errno = ENOMEM;
 	    sudo_debug_printf(SUDO_DEBUG_ERROR|SUDO_DEBUG_LINENO,
 		"integer overflow updating lbuf->size");
@@ -220,7 +221,7 @@ sudo_lbuf_append_quoted_v1(struct sudo_lbuf *lbuf, const char *set, const char *
     bool ret = false;
     const char *cp, *s;
     va_list ap;
-    int len;
+    unsigned int len;
     debug_decl(sudo_lbuf_append_quoted, SUDO_DEBUG_UTIL);
 
     if (sudo_lbuf_error(lbuf))
@@ -358,11 +359,11 @@ done:
 
 /* XXX - check output function return value */
 static void
-sudo_lbuf_println(struct sudo_lbuf *lbuf, char *line, int len)
+sudo_lbuf_println(struct sudo_lbuf *lbuf, char *line, size_t len)
 {
     char *cp, save;
-    int i, have, contlen = 0;
-    int indent = lbuf->indent;
+    size_t i, have, contlen = 0;
+    unsigned int indent = lbuf->indent;
     bool is_comment = false;
     debug_decl(sudo_lbuf_println, SUDO_DEBUG_UTIL);
 
@@ -382,14 +383,14 @@ sudo_lbuf_println(struct sudo_lbuf *lbuf, char *line, int len)
     have = lbuf->cols;
     while (cp != NULL && *cp != '\0') {
 	char *ep = NULL;
-	int need = len - (int)(cp - line);
+	size_t need = len - (cp - line);
 
 	if (need > have) {
 	    have -= contlen;		/* subtract for continuation char */
 	    if ((ep = memrchr(cp, ' ', have)) == NULL)
 		ep = memchr(cp + have, ' ', need - have);
 	    if (ep != NULL)
-		need = (int)(ep - cp);
+		need = (ep - cp);
 	}
 	if (cp != line) {
 	    if (is_comment) {
@@ -436,7 +437,7 @@ void
 sudo_lbuf_print_v1(struct sudo_lbuf *lbuf)
 {
     char *cp, *ep;
-    int len;
+    size_t len;
     debug_decl(sudo_lbuf_print, SUDO_DEBUG_UTIL);
 
     if (lbuf->buf == NULL || lbuf->len == 0)
@@ -460,7 +461,7 @@ sudo_lbuf_print_v1(struct sudo_lbuf *lbuf)
 	} else {
 	    len = lbuf->len - (cp - lbuf->buf);
 	    if ((ep = memchr(cp, '\n', len)) != NULL)
-		len = (int)(ep - cp);
+		len = (size_t)(ep - cp);
 	    if (len)
 		sudo_lbuf_println(lbuf, cp, len);
 	    cp = ep ? ep + 1 : NULL;

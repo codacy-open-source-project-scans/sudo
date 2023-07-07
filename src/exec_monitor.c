@@ -128,10 +128,10 @@ deliver_signal(struct monitor_closure *mc, int signo, bool from_parent)
  * Send status to parent over socketpair.
  * Return value is the same as send(2).
  */
-static int
+static ssize_t
 send_status(int fd, struct command_status *cstat)
 {
-    int n = -1;
+    ssize_t n = -1;
     debug_decl(send_status, SUDO_DEBUG_EXEC);
 
     if (cstat->type != CMD_INVALID) {
@@ -139,7 +139,7 @@ send_status(int fd, struct command_status *cstat)
 	    "sending status message to parent: [%d, %d]",
 	    cstat->type, cstat->val);
 	n = send(fd, cstat, sizeof(*cstat), 0);
-	if (n != sizeof(*cstat)) {
+	if (n != ssizeof(*cstat)) {
 	    sudo_debug_printf(SUDO_DEBUG_ERROR|SUDO_DEBUG_ERRNO,
 		"%s: unable to send status to parent", __func__);
 	}
@@ -321,7 +321,7 @@ mon_backchannel_cb(int fd, int what, void *v)
      * Note that the backchannel is a *blocking* socket.
      */
     n = recv(fd, &cstmp, sizeof(cstmp), MSG_WAITALL);
-    if (n != sizeof(cstmp)) {
+    if (n != ssizeof(cstmp)) {
 	if (n == -1) {
 	    if (errno == EINTR || errno == EAGAIN)
 		debug_return;
@@ -614,6 +614,7 @@ exec_monitor(struct command_details *details, sigset_t *oset,
 	if (write(errpipe[1], &errno, sizeof(int)) == -1)
 	    sudo_warn(U_("unable to execute %s"), details->command);
 	_exit(EXIT_FAILURE);
+	/* NOTREACHED */
     }
     close(errpipe[1]);
     if (intercept_fd != -1)
@@ -702,6 +703,7 @@ exec_monitor(struct command_details *details, sigset_t *oset,
 #endif
     sudo_debug_exit_int(__func__, __FILE__, __LINE__, sudo_debug_subsys, 1);
     _exit(EXIT_FAILURE);
+    /* NOTREACHED */
 
 bad:
     debug_return_int(-1);
