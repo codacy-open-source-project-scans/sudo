@@ -28,7 +28,7 @@
 #include "pathnames.h"
 
 static int
-_sudo_printf_default(int msg_type, const char *fmt, ...)
+_sudo_printf_default(int msg_type, const char * restrict fmt, ...)
 {
     FILE *fp = stdout;
     FILE *ttyfp = NULL;
@@ -205,7 +205,7 @@ py_str_array_from_tuple(PyObject *py_tuple)
     Py_ssize_t tuple_size = PyTuple_Size(py_tuple);
 
     // we need an extra 0 at the end
-    char **result = calloc(tuple_size + 1, sizeof(char *));
+    char **result = calloc((size_t)tuple_size + 1, sizeof(char *));
     if (result == NULL) {
         debug_return_ptr(NULL);
     }
@@ -344,8 +344,7 @@ _py_debug_python_function(const char *class_name, const char *function_name, con
 		/* Strip leading RC. to match python 3.10 behavior. */
 		memmove(args_str, args_str + 3, strlen(args_str + 3) + 1);
 	    }
-            if (py_args_sorted != NULL)
-                Py_DECREF(py_args_sorted);
+	    Py_XDECREF(py_args_sorted);
         }
         if (py_kwargs != NULL) {
             /* Sort by key for consistent output on Python < 3.6 */
@@ -359,13 +358,12 @@ _py_debug_python_function(const char *class_name, const char *function_name, con
 		}
 	    }
             kwargs_str = py_create_string_rep(py_kwargs);
-            if (py_kwargs_sorted != NULL)
-                Py_DECREF(py_kwargs_sorted);
+	    Py_XDECREF(py_kwargs_sorted);
         }
 
-        sudo_debug_printf(SUDO_DEBUG_DIAG, "%s.%s %s: %s %s\n", class_name,
+        sudo_debug_printf(SUDO_DEBUG_DIAG, "%s.%s %s: %s%s%s\n", class_name,
                           function_name, message, args_str ? args_str : "()",
-                          kwargs_str ? kwargs_str : "");
+                          kwargs_str ? " " : "", kwargs_str ? kwargs_str : "");
         free(args_str);
         free(kwargs_str);
     }

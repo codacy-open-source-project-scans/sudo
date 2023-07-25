@@ -56,6 +56,7 @@ struct monitor_message {
 TAILQ_HEAD(monitor_message_list, monitor_message);
 static struct monitor_message_list monitor_messages =
     TAILQ_HEAD_INITIALIZER(monitor_messages);
+static unsigned int term_raw_flags;
 
 static void sync_ttysize(struct exec_closure *ec);
 static void schedule_signal(struct exec_closure *ec, int signo);
@@ -161,8 +162,8 @@ pty_cleanup_hook(void)
 }
 
 /*
- * Check whether we are running in the foregroup.
- * Updates the foreground flag and updates the window size.
+ * Check whether sudo is running in the foreground.
+ * Updates the foreground flag in the closure.
  * Returns 0 if there is no tty, the foreground process group ID
  * on success, or -1 on failure (tty revoked).
  */
@@ -208,7 +209,7 @@ resume_terminal(struct exec_closure *ec)
 
     if (ec->foreground) {
 	/* Foreground process, set tty to raw mode. */
-	if (sudo_term_raw(io_fds[SFD_USERTTY], 0))
+	if (sudo_term_raw(io_fds[SFD_USERTTY], term_raw_flags))
 	    ec->term_raw = true;
     } else {
 	/* Background process, no access to tty. */
@@ -263,7 +264,7 @@ suspend_sudo_pty(struct exec_closure *ec, int signo)
 		"%s: command received SIG%s, parent running in the foregound",
 		__func__, signame);
 	    if (!ec->term_raw) {
-		if (sudo_term_raw(io_fds[SFD_USERTTY], 0))
+		if (sudo_term_raw(io_fds[SFD_USERTTY], term_raw_flags))
 		    ec->term_raw = true;
 	    }
 	    ret = SIGCONT_FG; /* resume command in foreground */
@@ -418,11 +419,11 @@ read_callback(int fd, int what, void *v)
 	default:
 	    sudo_debug_printf(SUDO_DEBUG_INFO,
 		"read %zd bytes from fd %d", n, fd);
-	    if (!iob->action(iob->buf + iob->len, n, iob)) {
+	    if (!iob->action(iob->buf + iob->len, (unsigned int)n, iob)) {
 		terminate_command(iob->ec->cmnd_pid, true);
 		iob->ec->cmnd_pid = -1;
 	    }
-	    iob->len += n;
+	    iob->len += (unsigned int)n;
 	    /* Disable reader if buffer is full. */
 	    if (iob->len == sizeof(iob->buf))
 		sudo_ev_del(evbase, iob->revent);
@@ -484,7 +485,7 @@ write_callback(int fd, int what, void *v)
 	case EBADF:
 	    /* other end of pipe closed or pty revoked */
 	    sudo_debug_printf(SUDO_DEBUG_INFO,
-		"unable to write %d bytes to fd %d",
+		"unable to write %u bytes to fd %d",
 		iob->len - iob->off, fd);
 	    /* Close reader if there is one. */
 	    if (iob->revent != NULL) {
@@ -515,7 +516,7 @@ write_callback(int fd, int what, void *v)
     } else {
 	sudo_debug_printf(SUDO_DEBUG_INFO,
 	    "wrote %zd bytes to fd %d", n, fd);
-	iob->off += n;
+	iob->off += (unsigned int)n;
 	/* Disable writer and reset the buffer if fully consumed. */
 	if (iob->off == iob->len) {
 	    iob->off = iob->len = 0;
@@ -1072,7 +1073,7 @@ exec_pty(struct command_details *details,
     struct exec_closure ec = { 0 };
     struct plugin_container *plugin;
     int evloop_retries = -1;
-    bool pipeline = false;
+    bool cmnd_foreground;
     sigset_t set, oset;
     struct sigaction sa;
     struct stat sb;
@@ -1183,14 +1184,14 @@ exec_pty(struct command_details *details,
 	    sudo_debug_printf(SUDO_DEBUG_INFO,
 		"stdin not a tty, not logging");
 	    if (S_ISFIFO(sb.st_mode))
-		pipeline = true;
+		SET(details->flags, CD_EXEC_BG);
 	    io_fds[SFD_STDIN] = dup(STDIN_FILENO);
 	    if (io_fds[SFD_STDIN] == -1)
 		sudo_fatal("dup");
 	} else {
 	    sudo_debug_printf(SUDO_DEBUG_INFO,
 		"stdin not a tty, creating a pipe");
-	    pipeline = true;
+	    SET(details->flags, CD_EXEC_BG);
 	    if (pipe2(io_pipe[STDIN_FILENO], O_CLOEXEC) != 0)
 		sudo_fatal("%s", U_("unable to create pipe"));
 	    io_buf_new(STDIN_FILENO, io_pipe[STDIN_FILENO][1],
@@ -1217,7 +1218,7 @@ exec_pty(struct command_details *details,
 	     */
 	    sudo_debug_printf(SUDO_DEBUG_INFO,
 		"terminal input not available, creating empty pipe");
-	    pipeline = true;
+	    SET(details->flags, CD_EXEC_BG);
 	    if (pipe2(io_pipe[STDIN_FILENO], O_CLOEXEC) != 0)
 		sudo_fatal("%s", U_("unable to create pipe"));
 	    io_fds[SFD_STDIN] = io_pipe[STDIN_FILENO][0];
@@ -1229,15 +1230,18 @@ exec_pty(struct command_details *details,
 	    /* Not logging stdout, do not interpose. */
 	    sudo_debug_printf(SUDO_DEBUG_INFO,
 		"stdout not a tty, not logging");
-	    if (S_ISFIFO(sb.st_mode))
-		pipeline = true;
+	    if (S_ISFIFO(sb.st_mode)) {
+		SET(details->flags, CD_EXEC_BG);
+		term_raw_flags = SUDO_TERM_OFLAG;
+	    }
 	    io_fds[SFD_STDOUT] = dup(STDOUT_FILENO);
 	    if (io_fds[SFD_STDOUT] == -1)
 		sudo_fatal("dup");
 	} else {
 	    sudo_debug_printf(SUDO_DEBUG_INFO,
 		"stdout not a tty, creating a pipe");
-	    pipeline = true;
+	    SET(details->flags, CD_EXEC_BG);
+	    term_raw_flags = SUDO_TERM_OFLAG;
 	    if (pipe2(io_pipe[STDOUT_FILENO], O_CLOEXEC) != 0)
 		sudo_fatal("%s", U_("unable to create pipe"));
 	    io_buf_new(io_pipe[STDOUT_FILENO][0], STDOUT_FILENO,
@@ -1250,8 +1254,6 @@ exec_pty(struct command_details *details,
 	    /* Not logging stderr, do not interpose. */
 	    sudo_debug_printf(SUDO_DEBUG_INFO,
 		"stderr not a tty, not logging");
-	    if (S_ISFIFO(sb.st_mode))
-		pipeline = true;
 	    io_fds[SFD_STDERR] = dup(STDERR_FILENO);
 	    if (io_fds[SFD_STDERR] == -1)
 		sudo_fatal("dup");
@@ -1275,13 +1277,11 @@ exec_pty(struct command_details *details,
 	    "%s: unable to copy terminal settings to pty", __func__);
 	ec.foreground = false;
     }
-
-    /* Start in raw mode unless part of a pipeline or backgrounded. */
-    if (ec.foreground) {
-	if (!pipeline && !ISSET(details->flags, CD_EXEC_BG)) {
-	    if (sudo_term_raw(io_fds[SFD_USERTTY], 0))
-		ec.term_raw = true;
-	}
+    /* Start in raw mode unless the command will run in the background. */
+    cmnd_foreground = ec.foreground && !ISSET(details->flags, CD_EXEC_BG);
+    if (cmnd_foreground) {
+	if (sudo_term_raw(io_fds[SFD_USERTTY], 0))
+	    ec.term_raw = true;
     }
 
     /*
@@ -1324,8 +1324,7 @@ exec_pty(struct command_details *details,
 	 * In this case, we rely on the command receiving SIGTTOU or SIGTTIN
 	 * when it needs access to the controlling tty.
 	 */                                                              
-	exec_monitor(details, &oset, ec.foreground && !pipeline, sv[1],
-	    intercept_sv[1]);
+	exec_monitor(details, &oset, cmnd_foreground, sv[1], intercept_sv[1]);
 	cstat->type = CMD_ERRNO;
 	cstat->val = errno;
 	if (send(sv[1], cstat, sizeof(*cstat), 0) == -1) {
@@ -1453,7 +1452,7 @@ sync_ttysize(struct exec_closure *ec)
 
     if (ioctl(io_fds[SFD_USERTTY], TIOCGWINSZ, &wsize) == 0) {
 	if (wsize.ws_row != ec->rows || wsize.ws_col != ec->cols) {
-	    sudo_debug_printf(SUDO_DEBUG_INFO, "%s: %hd x %hd -> %hd x %hd",
+	    sudo_debug_printf(SUDO_DEBUG_INFO, "%s: %d x %d -> %hd x %hd",
 		__func__, ec->rows, ec->cols, wsize.ws_row, wsize.ws_col);
 
 	    /* Log window change event. */

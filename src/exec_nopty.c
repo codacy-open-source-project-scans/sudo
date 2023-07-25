@@ -373,11 +373,11 @@ read_callback(int fd, int what, void *v)
 	default:
 	    sudo_debug_printf(SUDO_DEBUG_INFO,
 		"read %zd bytes from fd %d", n, fd);
-	    if (!iob->action(iob->buf + iob->len, n, iob)) {
+	    if (!iob->action(iob->buf + iob->len, (unsigned int)n, iob)) {
 		terminate_command(iob->ec->cmnd_pid, false);
 		iob->ec->cmnd_pid = -1;
 	    }
-	    iob->len += n;
+	    iob->len += (unsigned int)n;
 	    /* Disable reader if buffer is full. */
 	    if (iob->len == sizeof(iob->buf))
 		sudo_ev_del(evbase, iob->revent);
@@ -410,7 +410,7 @@ write_callback(int fd, int what, void *v)
 	case EBADF:
 	    /* other end of pipe closed */
 	    sudo_debug_printf(SUDO_DEBUG_INFO,
-		"unable to write %d bytes to fd %d",
+		"unable to write %u bytes to fd %d",
 		iob->len - iob->off, fd);
 	    /* Close reader if there is one. */
 	    if (iob->revent != NULL) {
@@ -436,7 +436,7 @@ write_callback(int fd, int what, void *v)
     } else {
 	sudo_debug_printf(SUDO_DEBUG_INFO,
 	    "wrote %zd bytes to fd %d", n, fd);
-	iob->off += n;
+	iob->off += (unsigned int)n;
 	/* Disable writer and reset the buffer if fully consumed. */
 	if (iob->off == iob->len) {
 	    iob->off = iob->len = 0;

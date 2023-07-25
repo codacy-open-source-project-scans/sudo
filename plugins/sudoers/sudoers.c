@@ -82,14 +82,14 @@ static void set_callbacks(void);
  */
 struct sudo_user sudo_user;
 struct passwd *list_pw;
-int sudo_mode;
+unsigned int sudo_mode;
 
 static char *prev_user;
 static struct sudo_nss_list *snl;
 static bool unknown_runas_uid;
 static bool unknown_runas_gid;
 static bool override_umask;
-static int cmnd_status = -1;
+static int cmnd_status = NOT_FOUND_ERROR;
 static struct defaults_list initial_defaults = TAILQ_HEAD_INITIALIZER(initial_defaults);
 
 #ifdef __linux__
@@ -336,7 +336,8 @@ done:
 static int
 sudoers_check_common(int pwflag)
 {
-    int oldlocale, validated, ret = -1;
+    int oldlocale, ret = -1;
+    unsigned int validated;
     time_t now;
     debug_decl(sudoers_check_common, SUDOERS_DEBUG_PLUGIN);
 
@@ -480,7 +481,6 @@ sudoers_check_common(int pwflag)
 	    N_("user not allowed to change directory to %s"), user_runcwd);
 	sudo_warnx(U_("you are not permitted to use the -D option with %s"),
 	    user_cmnd);
-	debug_return_bool(false);
 	goto bad;
     default:
 	goto done;
@@ -547,7 +547,7 @@ sudoers_check_common(int pwflag)
     }
 
     /* If user specified env vars make sure sudoers allows it. */
-    if (ISSET(sudo_mode, MODE_RUN|MODE_CHECK) && !def_setenv) {
+    if (ISSET(sudo_mode, MODE_RUN) && !def_setenv) {
 	if (ISSET(sudo_mode, MODE_PRESERVE_ENV)) {
 	    log_warningx(SLOG_NO_STDERR|SLOG_AUDIT,
 		N_("user not allowed to preserve the environment"));
@@ -624,13 +624,13 @@ sudoers_check_cmnd(int argc, char * const argv[], char *env_add[],
 	sudoers_gc_remove(GC_PTR, NewArgv);
 	free(NewArgv);
     }
-    NewArgv = reallocarray(NULL, argc + 2, sizeof(char *));
+    NewArgv = reallocarray(NULL, (size_t)argc + 2, sizeof(char *));
     if (NewArgv == NULL) {
 	sudo_warnx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 	goto error;
     }
     sudoers_gc_add(GC_PTR, NewArgv);
-    memcpy(NewArgv, argv, argc * sizeof(char *));
+    memcpy(NewArgv, argv, (size_t)argc * sizeof(char *));
     NewArgc = argc;
     NewArgv[NewArgc] = NULL;
     if (ISSET(sudo_mode, MODE_LOGIN_SHELL) && runas_pw != NULL) {
@@ -692,7 +692,7 @@ sudoers_check_cmnd(int argc, char * const argv[], char *env_add[],
 	if (NewArgc > 1 && strcmp(NewArgv[0], "-bash") == 0 &&
 	    strcmp(NewArgv[1], "-c") == 0) {
 	    /* We allocated extra space for the --login above. */
-	    memmove(&NewArgv[2], &NewArgv[1], sizeof(char *) * NewArgc);
+	    memmove(&NewArgv[2], &NewArgv[1], (size_t)NewArgc * sizeof(char *));
 	    NewArgv[1] = (char *)"--login";
 	    NewArgc++;
 	}
@@ -897,7 +897,7 @@ sudoers_list(int argc, char * const argv[], const char *list_user, bool verbose)
 	}
     }
 
-    NewArgv = reallocarray(NULL, argc + 2, sizeof(char *));
+    NewArgv = reallocarray(NULL, (size_t)argc + 2, sizeof(char *));
     if (NewArgv == NULL) {
 	sudo_warnx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 	goto done;
@@ -905,7 +905,7 @@ sudoers_list(int argc, char * const argv[], const char *list_user, bool verbose)
     sudoers_gc_add(GC_PTR, NewArgv);
     NewArgv[0] = (char *)"list";
     if (argc != 0)
-	memcpy(NewArgv + 1, argv, argc * sizeof(char *));
+	memcpy(NewArgv + 1, argv, (size_t)argc * sizeof(char *));
     NewArgc = argc + 1;
     NewArgv[NewArgc] = NULL;
 
@@ -1320,7 +1320,7 @@ open_sudoers(const char *path, char **outfile, bool doedit, bool *keepopen)
 static bool
 set_loginclass(struct passwd *pw)
 {
-    const int errflags = SLOG_RAW_MSG;
+    const unsigned int errflags = SLOG_RAW_MSG;
     login_cap_t *lc;
     bool ret = true;
     debug_decl(set_loginclass, SUDOERS_DEBUG_PLUGIN);
@@ -1721,7 +1721,7 @@ cb_syslog_maxlen(const char *file, int line, int column,
 {
     debug_decl(cb_syslog_maxlen, SUDOERS_DEBUG_PLUGIN);
 
-    eventlog_set_syslog_maxlen(sd_un->ival);
+    eventlog_set_syslog_maxlen((size_t)sd_un->ival);
 
     debug_return_bool(true);
 }
@@ -1732,7 +1732,7 @@ cb_loglinelen(const char *file, int line, int column,
 {
     debug_decl(cb_loglinelen, SUDOERS_DEBUG_PLUGIN);
 
-    eventlog_set_file_maxlen(sd_un->ival);
+    eventlog_set_file_maxlen((size_t)sd_un->ival);
 
     debug_return_bool(true);
 }

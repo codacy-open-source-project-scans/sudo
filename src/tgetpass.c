@@ -108,7 +108,7 @@ tgetpass_display_error(enum tgetpass_errval errval)
  * Like getpass(3) but with timeout and echo flags.
  */
 char *
-tgetpass(const char *prompt, int timeout, int flags,
+tgetpass(const char *prompt, int timeout, unsigned int flags,
     struct sudo_conv_callback *callback)
 {
     struct sigaction sa, savealrm, saveint, savehup, savequit, saveterm;
@@ -222,7 +222,7 @@ restart:
     }
 
     if (timeout > 0)
-	alarm(timeout);
+	alarm((unsigned int)timeout);
     pass = getln(input, buf, sizeof(buf), feedback, &errval);
     alarm(0);
     save_errno = errno;

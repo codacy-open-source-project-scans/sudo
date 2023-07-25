@@ -42,7 +42,7 @@
 #include "sudo.h"
 #include "sudo_lbuf.h"
 
-int tgetpass_flags;
+unsigned int tgetpass_flags;
 
 /*
  * Local functions.
@@ -225,7 +225,7 @@ parse_env_list(struct environment *e, char *list)
  * Sets nargc and nargv which corresponds to the argc/argv we'll use
  * for the command to be run (if we are running one).
  */
-int
+unsigned int
 parse_args(int argc, char **argv, const char *shell, int *old_optind,
     int *nargc, char ***nargv, struct sudo_settings **settingsp,
     char ***env_addp, const char **list_userp)
@@ -234,9 +234,9 @@ parse_args(int argc, char **argv, const char *shell, int *old_optind,
     struct option *long_opts = sudo_long_opts;
     struct environment extra_env;
     const char *list_user = NULL;
-    int mode = 0;		/* what mode is sudo to be run in? */
-    int flags = 0;		/* mode flags */
-    int valid_flags = DEFAULT_VALID_FLAGS;
+    unsigned int mode = 0;	/* what mode is sudo to be run in? */
+    unsigned int flags = 0;	/* mode flags */
+    unsigned int valid_flags = DEFAULT_VALID_FLAGS;
     int ch, i;
     char *cp;
     debug_decl(parse_args, SUDO_DEBUG_ARGS);
@@ -642,7 +642,7 @@ parse_args(int argc, char **argv, const char *shell, int *old_optind,
 	    ac += 2; /* -c cmnd */
 	}
 
-	av = reallocarray(NULL, ac + 1, sizeof(char *));
+	av = reallocarray(NULL, (size_t)ac + 1, sizeof(char *));
 	if (av == NULL)
 	    sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 	if (!gc_add(GC_PTR, av))
@@ -667,7 +667,7 @@ parse_args(int argc, char **argv, const char *shell, int *old_optind,
 	char **av;
 	int ac;
 
-	av = reallocarray(NULL, argc + 2, sizeof(char *));
+	av = reallocarray(NULL, (size_t)argc + 2, sizeof(char *));
 	if (av == NULL)
 	    sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 	if (!gc_add(GC_PTR, av))
@@ -692,7 +692,7 @@ parse_args(int argc, char **argv, const char *shell, int *old_optind,
     *nargc = argc;
     *nargv = argv;
     *list_userp = list_user;
-    debug_return_int(mode | flags);
+    debug_return_uint(mode | flags);
 }
 
 /*
@@ -713,7 +713,7 @@ display_usage(FILE *fp)
     if (strcmp(getprogname(), "sudoedit") == 0)
 	uvecs = sudoedit_usage;
 
-    indent = strlen(getprogname()) + 8;
+    indent = (int)strlen(getprogname()) + 8;
     while ((uvec = *uvecs) != NULL) {
 	(void)fprintf(fp, "usage: %s %s\n", getprogname(), uvec[0]);
 	for (i = 1; uvec[i] != NULL; i++) {
@@ -760,7 +760,7 @@ usage_excl_ticket(void)
 }
 
 static int
-help_out(const char *buf)
+help_out(const char * restrict buf)
 {
     return fputs(buf, stdout);
 }

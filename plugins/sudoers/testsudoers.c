@@ -34,6 +34,11 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef HAVE_STDBOOL_H
+# include <stdbool.h>
+#else
+# include "compat/stdbool.h"
+#endif /* HAVE_STDBOOL_H */
 #include <string.h>
 #ifdef HAVE_STRINGS_H
 # include <strings.h>
@@ -42,6 +47,7 @@
 #include <errno.h>
 
 #include "testsudoers_pwutil.h"
+#include "toke.h"
 #include "tsgetgrpw.h"
 #include "sudoers.h"
 #include "interfaces.h"
@@ -65,16 +71,13 @@ static void dump_sudoers(void);
 static void set_runaspw(const char *);
 static void set_runasgr(const char *);
 static bool cb_runas_default(const char *file, int line, int column, const union sudo_defs_val *, int);
-static int testsudoers_error(const char *msg);
-static int testsudoers_output(const char *buf);
+static int testsudoers_error(const char * restrict buf);
+static int testsudoers_output(const char * restrict buf);
 sudo_noreturn static void usage(void);
 static void cb_userspec(struct userspec *us, int user_match);
 static void cb_privilege(struct privilege *priv, int host_match);
 static void cb_cmndspec(struct cmndspec *cs, int date_match, int runas_match, int cmnd_match);
 static int testsudoers_query(const struct sudo_nss *nss, struct passwd *pw);
-
-/* gram.y */
-extern int (*trace_print)(const char *msg);
 
 /*
  * Globals
@@ -83,13 +86,10 @@ struct sudo_user sudo_user;
 struct passwd *list_pw;
 static const char *orig_cmnd;
 static char *runas_group, *runas_user;
-int sudo_mode = MODE_RUN;
+unsigned int sudo_mode = MODE_RUN;
 
 #if defined(SUDO_DEVEL) && defined(__OpenBSD__)
 extern char *malloc_options;
-#endif
-#if YYDEBUG
-extern int sudoersdebug;
 #endif
 
 sudo_dso_public int main(int argc, char *argv[]);
@@ -106,7 +106,8 @@ main(int argc, char *argv[])
     char *p, *grfile, *pwfile;
     const char *errstr;
     int ch, dflag, exitcode = EXIT_FAILURE;
-    int validated, status = FOUND;
+    unsigned int validated;
+    int status = FOUND;
     char cwdbuf[PATH_MAX];
     time_t now;
     id_t id;
@@ -264,8 +265,8 @@ main(int argc, char *argv[])
 	if ((user_args = malloc(size)) == NULL)
 	    sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 	for (to = user_args, from = argv; *from; from++) {
-	    n = strlcpy(to, *from, size - (to - user_args));
-	    if (n >= size - (to - user_args))
+	    n = strlcpy(to, *from, size - (size_t)(to - user_args));
+	    if (n >= size - (size_t)(to - user_args))
 		sudo_fatalx(U_("internal error, %s overflow"), getprogname());
 	    to += n;
 	    *to++ = ' ';
@@ -715,13 +716,13 @@ done:
 }
 
 static int
-testsudoers_output(const char *buf)
+testsudoers_output(const char * restrict buf)
 {
     return fputs(buf, stdout);
 }
 
 static int
-testsudoers_error(const char *buf)
+testsudoers_error(const char *restrict buf)
 {
     return fputs(buf, stderr);
 }

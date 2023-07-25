@@ -95,8 +95,8 @@ static bool parse_ldif(struct sudoers_parse_tree *parse_tree, const char *input_
 static bool cvtsudoers_parse_filter(char *expression);
 static struct cvtsudoers_config *cvtsudoers_conf_read(const char *conf_file);
 static void cvtsudoers_conf_free(struct cvtsudoers_config *conf);
-static int cvtsudoers_parse_defaults(char *expression);
-static int cvtsudoers_parse_suppression(char *expression);
+static unsigned int cvtsudoers_parse_defaults(char *expression);
+static unsigned int cvtsudoers_parse_suppression(char *expression);
 static void filter_userspecs(struct sudoers_parse_tree *parse_tree, struct cvtsudoers_config *conf);
 static void filter_defaults(struct sudoers_parse_tree *parse_tree, struct cvtsudoers_config *conf);
 static void alias_remove_unused(struct sudoers_parse_tree *parse_tree);
@@ -206,7 +206,8 @@ main(int argc, char *argv[])
 	    }
 	    break;
 	case 'I':
-	    conf->order_increment = sudo_strtonum(optarg, 1, UINT_MAX, &errstr);
+	    conf->order_increment =
+		(unsigned int)sudo_strtonum(optarg, 1, UINT_MAX, &errstr);
 	    if (errstr != NULL) {
 		sudo_warnx(U_("order increment: %s: %s"), optarg, U_(errstr));
 		usage();
@@ -225,7 +226,8 @@ main(int argc, char *argv[])
 	    output_file = optarg;
 	    break;
 	case 'O':
-	    conf->sudo_order = sudo_strtonum(optarg, 0, UINT_MAX, &errstr);
+	    conf->sudo_order =
+		(unsigned int)sudo_strtonum(optarg, 0, UINT_MAX, &errstr);
 	    if (errstr != NULL) {
 		sudo_warnx(U_("starting order: %s: %s"), optarg, U_(errstr));
 		usage();
@@ -235,7 +237,8 @@ main(int argc, char *argv[])
 	    conf->prune_matches = true;
 	    break;
 	case 'P':
-	    conf->order_padding = sudo_strtonum(optarg, 1, UINT_MAX, &errstr);
+	    conf->order_padding =
+		(unsigned int)sudo_strtonum(optarg, 1, UINT_MAX, &errstr);
 	    if (errstr != NULL ) {
 		sudo_warnx(U_("order padding: %s: %s"), optarg, U_(errstr));
 		usage();
@@ -306,12 +309,12 @@ main(int argc, char *argv[])
     }
     if (conf->defstr != NULL) {
 	conf->defaults = cvtsudoers_parse_defaults(conf->defstr);
-	if (conf->defaults == -1)
+	if (conf->defaults == (unsigned int)-1)
 	    usage();
     }
     if (conf->supstr != NULL) {
 	conf->suppress = cvtsudoers_parse_suppression(conf->supstr);
-	if (conf->suppress == -1)
+	if (conf->suppress == (unsigned int)-1)
 	    usage();
     }
 
@@ -465,7 +468,7 @@ done:
 }
 
 void
-log_warnx(const char *fmt, ...)
+log_warnx(const char * restrict fmt, ...)
 {
     va_list ap;
 
@@ -522,8 +525,8 @@ cvtsudoers_parse_keyword(const char *conf_file, const char *keyword,
 		break;
 	    case CONF_UINT:
 		{
-		    unsigned int uval = 
-			sudo_strtonum(value, 0, UINT_MAX, &errstr);
+		    unsigned int uval =
+			(unsigned int)sudo_strtonum(value, 0, UINT_MAX, &errstr);
 		    if (errstr != NULL) {
 			sudo_warnx(U_("%s: %s: %s: %s"),
 			    conf_file, keyword, value, U_(errstr));
@@ -590,7 +593,7 @@ cvtsudoers_conf_read(const char *path)
 	keyword = line;
 	if ((value = strchr(line, '=')) == NULL || value == line)
 	    continue;
-	len = value - line;
+	len = (size_t)(value - line);
 
 	/* Trim whitespace after keyword and NUL-terminate. */
 	while (len > 0 && isblank((unsigned char)line[len - 1]))
@@ -629,11 +632,11 @@ cvtsudoers_conf_free(struct cvtsudoers_config *conf)
     debug_return;
 }
 
-static int
+static unsigned int
 cvtsudoers_parse_defaults(char *expression)
 {
     char *last, *cp = expression;
-    int flags = 0;
+    unsigned int flags = 0;
     debug_decl(cvtsudoers_parse_defaults, SUDOERS_DEBUG_UTIL);
 
     for ((cp = strtok_r(cp, ",", &last)); cp != NULL; (cp = strtok_r(NULL, ",", &last))) {
@@ -651,18 +654,18 @@ cvtsudoers_parse_defaults(char *expression)
 	    SET(flags, CVT_DEFAULTS_CMND);
 	} else {
 	    sudo_warnx(U_("invalid defaults type: %s"), cp);
-	    debug_return_int(-1);
+	    debug_return_uint((unsigned int)-1);
 	}
     }
 
-    debug_return_int(flags);
+    debug_return_uint(flags);
 }
 
-static int
+static unsigned int
 cvtsudoers_parse_suppression(char *expression)
 {
     char *last, *cp = expression;
-    int flags = 0;
+    unsigned int flags = 0;
     debug_decl(cvtsudoers_parse_suppression, SUDOERS_DEBUG_UTIL);
 
     for ((cp = strtok_r(cp, ",", &last)); cp != NULL; (cp = strtok_r(NULL, ",", &last))) {
@@ -674,11 +677,11 @@ cvtsudoers_parse_suppression(char *expression)
 	    SET(flags, SUPPRESS_PRIVS);
 	} else {
 	    sudo_warnx(U_("invalid suppression type: %s"), cp);
-	    debug_return_int(-1);
+	    debug_return_uint((unsigned int)-1);
 	}
     }
 
-    debug_return_int(flags);
+    debug_return_uint(flags);
 }
 
 static bool
@@ -870,7 +873,7 @@ hostlist_matches_filter(struct sudoers_parse_tree *parse_tree,
     char *lhost, *shost;
     bool ret = false;
     char **shosts;
-    int n = 0;
+    size_t n = 0;
     debug_decl(hostlist_matches_filter, SUDOERS_DEBUG_UTIL);
 
     if (filters == NULL || STAILQ_EMPTY(&filters->hosts))
@@ -1079,7 +1082,7 @@ print_aliases_sudoers(struct sudoers_parse_tree *parse_tree,
 static FILE *output_fp;		/* global for convert_sudoers_output */
 
 static int
-convert_sudoers_output(const char *buf)
+convert_sudoers_output(const char * restrict buf)
 {
     return fputs(buf, output_fp);
 }
@@ -1132,7 +1135,7 @@ filter_userspecs(struct sudoers_parse_tree *parse_tree,
  */
 static bool
 alias_matches(struct sudoers_parse_tree *parse_tree, const char *name,
-    const char *alias_name, int alias_type)
+    const char *alias_name, short alias_type)
 {
     struct alias *a;
     struct member *m;
@@ -1249,7 +1252,7 @@ alias_used_by_userspecs(struct sudoers_parse_tree *parse_tree,
  */
 static void
 free_aliases_by_members(struct sudoers_parse_tree *parse_tree,
-    struct member_list *members, int type)
+    struct member_list *members, short type)
 {
     struct member *m;
     struct alias *a;
@@ -1277,7 +1280,7 @@ filter_defaults(struct sudoers_parse_tree *parse_tree,
     struct member_list cmnd_aliases = TAILQ_HEAD_INITIALIZER(cmnd_aliases);
     struct defaults *def, *def_next;
     struct member *m, *m_next;
-    int alias_type;
+    short alias_type;
     debug_decl(filter_defaults, SUDOERS_DEBUG_DEFAULTS);
 
     if (filters == NULL && conf->defaults == CVT_DEFAULTS_ALL)

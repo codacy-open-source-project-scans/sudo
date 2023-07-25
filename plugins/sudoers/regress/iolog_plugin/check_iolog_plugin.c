@@ -47,12 +47,12 @@ sudo_dso_public int main(int argc, char *argv[], char *envp[]);
 sudo_noreturn static void
 usage(void)
 {
-    fprintf(stderr, "usage: %s pathname\n", getprogname());
+    fprintf(stderr, "usage: %s [-v] pathname\n", getprogname());
     exit(EXIT_FAILURE);
 }
 
 static int
-sudo_printf_int(int msg_type, const char *fmt, ...)
+sudo_printf_int(int msg_type, const char * restrict fmt, ...)
 {
     va_list ap;
     int len;
@@ -358,14 +358,27 @@ int
 main(int argc, char *argv[], char *envp[])
 {
     struct passwd *tpw;
-    int tests = 0, errors = 0;
+    int ch, tests = 0, errors = 0;
     const char *iolog_dir;
 
     initprogname(argc > 0 ? argv[0] : "check_iolog_plugin");
 
-    if (argc != 2)
+    while ((ch = getopt(argc, argv, "v")) != -1) {
+        switch (ch) {
+        case 'v':
+            /* ignored */
+            break;
+        default:
+            usage();
+            /* NOTREACHED */
+        }
+    }
+    argc -= optind;
+    argv += optind;
+
+    if (argc != 1)
 	usage();
-    iolog_dir = argv[1];
+    iolog_dir = argv[0];
 
     /* Set runas user. */
     if ((tpw = getpwuid(0)) == NULL) {
@@ -408,7 +421,7 @@ restore_perms(void)
 }
 
 bool
-log_warning(int flags, const char *fmt, ...)
+log_warning(unsigned int flags, const char * restrict fmt, ...)
 {
     va_list ap;
 
@@ -420,7 +433,7 @@ log_warning(int flags, const char *fmt, ...)
 }
 
 bool
-log_warningx(int flags, const char *fmt, ...)
+log_warningx(unsigned int flags, const char * restrict fmt, ...)
 {
     va_list ap;
 

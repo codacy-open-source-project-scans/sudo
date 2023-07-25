@@ -19022,6 +19022,57 @@ printf "%s\n" "#define const /**/" >>confdefs.h
 
 fi
 
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for C/C++ restrict keyword" >&5
+printf %s "checking for C/C++ restrict keyword... " >&6; }
+if test ${ac_cv_c_restrict+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) ac_cv_c_restrict=no
+   # Put '__restrict__' first, to avoid problems with glibc and non-GCC; see:
+   # https://lists.gnu.org/archive/html/bug-autoconf/2016-02/msg00006.html
+   # Put 'restrict' last, because C++ lacks it.
+   for ac_kw in __restrict__ __restrict _Restrict restrict; do
+     cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+typedef int *int_ptr;
+	   int foo (int_ptr $ac_kw ip) { return ip[0]; }
+	   int bar (int [$ac_kw]); /* Catch GCC bug 14050.  */
+	   int bar (int ip[$ac_kw]) { return ip[0]; }
+
+int
+main (void)
+{
+int s[1];
+	   int *$ac_kw t = s;
+	   t[0] = 0;
+	   return foo (t) + bar (t);
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  ac_cv_c_restrict=$ac_kw
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+     test "$ac_cv_c_restrict" != no && break
+   done
+   ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_c_restrict" >&5
+printf "%s\n" "$ac_cv_c_restrict" >&6; }
+
+ case $ac_cv_c_restrict in
+   restrict) ;;
+   no) printf "%s\n" "#define restrict /**/" >>confdefs.h
+ ;;
+   *)  printf "%s\n" "#define restrict $ac_cv_c_restrict" >>confdefs.h
+ ;;
+ esac
+
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for inline" >&5
 printf %s "checking for inline... " >&6; }
 if test ${ac_cv_c_inline+y}
@@ -28409,19 +28460,6 @@ else case e in #(
 esac
 fi
 printf "%s\n" "#define HAVE_DECL_SSIZE_MAX $ac_have_decl" >>confdefs.h
-ac_fn_check_decl "$LINENO" "SYMLOOP_MAX" "ac_cv_have_decl_SYMLOOP_MAX" "
-#include <sys/types.h>
-#include <limits.h>
-
-" "$ac_c_undeclared_builtin_options" "CFLAGS"
-if test "x$ac_cv_have_decl_SYMLOOP_MAX" = xyes
-then :
-  ac_have_decl=1
-else case e in #(
-  e) ac_have_decl=0 ;;
-esac
-fi
-printf "%s\n" "#define HAVE_DECL_SYMLOOP_MAX $ac_have_decl" >>confdefs.h
 
 ac_fn_check_decl "$LINENO" "SIZE_MAX" "ac_cv_have_decl_SIZE_MAX" "
 #include <sys/types.h>
@@ -28534,25 +28572,6 @@ else case e in #(
 esac
 fi
 printf "%s\n" "#define HAVE_DECL__POSIX_PATH_MAX $ac_have_decl" >>confdefs.h
-
-
-fi
-if test "$ac_cv_have_decl_SYMLOOP_MAX" != "yes"
-then :
-
-    ac_fn_check_decl "$LINENO" "_POSIX_SYMLOOP_MAX" "ac_cv_have_decl__POSIX_SYMLOOP_MAX" "
-#include <sys/types.h>
-#include <limits.h>
-
-" "$ac_c_undeclared_builtin_options" "CFLAGS"
-if test "x$ac_cv_have_decl__POSIX_SYMLOOP_MAX" = xyes
-then :
-  ac_have_decl=1
-else case e in #(
-  e) ac_have_decl=0 ;;
-esac
-fi
-printf "%s\n" "#define HAVE_DECL__POSIX_SYMLOOP_MAX $ac_have_decl" >>confdefs.h
 
 
 fi

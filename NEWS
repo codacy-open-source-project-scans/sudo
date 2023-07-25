@@ -1,3 +1,33 @@
+What's new in Sudo 1.9.14p3
+
+ * Fixed a crash with Python 3.12 when the sudo Python python is
+   unloaded.  This only affects "make check" for the Python plugin.
+
+ * Adapted the sudo Python plugin test output to match Python 3.12.
+
+What's new in Sudo 1.9.14p2
+
+ * Fixed a crash on Linux systems introduced in version 1.9.14 when
+   running a command with a NULL argv[0] if "log_subcmds" or
+   "intercept" is enabled in sudoers.
+
+ * Fixed a problem with "stair-stepped" output when piping or
+   redirecting the output of a sudo command that takes user input.
+
+ * Fixed a bug introduced in sudo 1.9.14 that affects matching
+   sudoers rules containing a Runas_Spec with an empty Runas user.
+   These rules should only match when sudo's -g option is used but
+   were matching even without the -g option.  GitHub issue #290.
+
+What's new in Sudo 1.9.14p1
+
+ * Fixed an invalid free bug in sudo_logsrvd that was introduced
+   in version 1.9.14 which could cause sudo_logsrvd to crash.
+
+ * The sudoers plugin no longer tries to send the terminal name
+   to the log server when no terminal is present.  This bug was
+   introduced in version 1.9.14.
+
 What's new in Sudo 1.9.14
 
  * Fixed a bug where if the "intercept" or "log_subcmds" sudoers
@@ -40,7 +70,7 @@ What's new in Sudo 1.9.14
  * Fixed a bug where only the first two digits of the TSID field
    being was logged.  Bug #1046.
 
- * The "log_pty" sudoers option is now enabled by default.  To
+ * The "use_pty" sudoers option is now enabled by default.  To
    restore the historic behavior where a command is run in the
    user's terminal, add "Defaults !use_pty" to the sudoers file.
    GitHub issue #258.

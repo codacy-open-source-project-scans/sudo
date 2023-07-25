@@ -65,7 +65,7 @@ int sudoedit_nfiles;
 extern sudo_dso_public struct policy_plugin sudoers_policy;
 
 static int
-parse_bool(const char *line, int varlen, int *flags, int fval)
+parse_bool(const char *line, int varlen, unsigned int *flags, unsigned int fval)
 {
     debug_decl(parse_bool, SUDOERS_DEBUG_PLUGIN);
 
@@ -93,12 +93,12 @@ parse_bool(const char *line, int varlen, int *flags, int fval)
  * Deserialize args, settings and user_info arrays.
  * Fills in struct sudo_user and other common sudoers state.
  */
-int
+unsigned int
 sudoers_policy_deserialize_info(void *v, struct defaults_list *defaults)
 {
     const char *p, *errstr, *groups = NULL;
     struct sudoers_open_info *info = v;
-    int flags = MODE_UPDATE_TICKET;
+    unsigned int flags = MODE_UPDATE_TICKET;
     const char *remhost = NULL;
     unsigned char uuid[16];
     char * const *cur;
@@ -191,7 +191,7 @@ sudoers_policy_deserialize_info(void *v, struct defaults_list *defaults)
 	if (MATCHES(*cur, "closefrom=")) {
 	    errno = 0;
 	    p = *cur + sizeof("closefrom=") - 1;
-	    user_closefrom = sudo_strtonum(p, 3, INT_MAX, &errstr);
+	    user_closefrom = (int)sudo_strtonum(p, 3, INT_MAX, &errstr);
 	    if (user_closefrom == 0) {
 		sudo_warnx(U_("%s: %s"), *cur, U_(errstr));
 		goto bad;
@@ -361,7 +361,7 @@ sudoers_policy_deserialize_info(void *v, struct defaults_list *defaults)
 	if (MATCHES(*cur, "max_groups=")) {
 	    errno = 0;
 	    p = *cur + sizeof("max_groups=") - 1;
-	    sudo_user.max_groups = sudo_strtonum(p, 1, 1024, &errstr);
+	    sudo_user.max_groups = (int)sudo_strtonum(p, 1, 1024, &errstr);
 	    if (sudo_user.max_groups == 0) {
 		sudo_warnx(U_("%s: %s"), *cur, U_(errstr));
 		goto bad;
@@ -473,7 +473,7 @@ sudoers_policy_deserialize_info(void *v, struct defaults_list *defaults)
 	if (MATCHES(*cur, "lines=")) {
 	    errno = 0;
 	    p = *cur + sizeof("lines=") - 1;
-	    sudo_user.lines = sudo_strtonum(p, 1, INT_MAX, &errstr);
+	    sudo_user.lines = (int)sudo_strtonum(p, 1, INT_MAX, &errstr);
 	    if (sudo_user.lines == 0) {
 		sudo_warnx(U_("%s: %s"), *cur, U_(errstr));
 		goto bad;
@@ -483,7 +483,7 @@ sudoers_policy_deserialize_info(void *v, struct defaults_list *defaults)
 	if (MATCHES(*cur, "cols=")) {
 	    errno = 0;
 	    p = *cur + sizeof("cols=") - 1;
-	    sudo_user.cols = sudo_strtonum(p, 1, INT_MAX, &errstr);
+	    sudo_user.cols = (int)sudo_strtonum(p, 1, INT_MAX, &errstr);
 	    if (sudo_user.cols == 0) {
 		sudo_warnx(U_("%s: %s"), *cur, U_(errstr));
 		goto bad;
@@ -612,12 +612,12 @@ sudoers_policy_deserialize_info(void *v, struct defaults_list *defaults)
 #undef MATCHES
 #undef INVALID
 #undef CHECK
-    debug_return_int(flags);
+    debug_return_uint(flags);
 
 oom:
     sudo_warnx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 bad:
-    debug_return_int(MODE_ERROR);
+    debug_return_uint(MODE_ERROR);
 }
 
 /* Return the policy's struct sudoers_parser_config. */
@@ -803,7 +803,7 @@ sudoers_policy_store_result(bool accepted, char *argv[], char *envp[],
 
 	/* We reserve an extra spot in the list for the effective gid. */
 	glsize = sizeof("runas_groups=") - 1 +
-	    ((gidlist->ngids + 1) * (MAX_UID_T_LEN + 1));
+	    ((size_t)(gidlist->ngids + 1) * (MAX_UID_T_LEN + 1));
 	gid_list = malloc(glsize);
 	if (gid_list == NULL) {
 	    sudo_gidlist_delref(gidlist);
@@ -811,29 +811,32 @@ sudoers_policy_store_result(bool accepted, char *argv[], char *envp[],
 	}
 	memcpy(gid_list, "runas_groups=", sizeof("runas_groups=") - 1);
 	cp = gid_list + sizeof("runas_groups=") - 1;
+	glsize -= (size_t)(cp - gid_list);
 
 	/* On BSD systems the effective gid is the first group in the list. */
 	egid = runas_gr ? (unsigned int)runas_gr->gr_gid :
 	    (unsigned int)runas_pw->pw_gid;
-	len = snprintf(cp, glsize - (cp - gid_list), "%u", (unsigned int)egid);
-	if (len < 0 || (size_t)len >= glsize - (cp - gid_list)) {
+	len = snprintf(cp, glsize, "%u", (unsigned int)egid);
+	if (len < 0 || (size_t)len >= glsize) {
 	    sudo_warnx(U_("internal error, %s overflow"), __func__);
 	    free(gid_list);
 	    sudo_gidlist_delref(gidlist);
 	    goto bad;
 	}
 	cp += len;
+	glsize -= (size_t)len;
 	for (i = 0; i < gidlist->ngids; i++) {
 	    if (gidlist->gids[i] != egid) {
-		len = snprintf(cp, glsize - (cp - gid_list), ",%u",
-		     (unsigned int) gidlist->gids[i]);
-		if (len < 0 || (size_t)len >= glsize - (cp - gid_list)) {
+		len = snprintf(cp, glsize, ",%u",
+		     (unsigned int)gidlist->gids[i]);
+		if (len < 0 || (size_t)len >= glsize) {
 		    sudo_warnx(U_("internal error, %s overflow"), __func__);
 		    free(gid_list);
 		    sudo_gidlist_delref(gidlist);
 		    goto bad;
 		}
 		cp += len;
+		glsize -= (size_t)len;
 	    }
 	}
 	command_info[info_len++] = gid_list;
@@ -1178,7 +1181,7 @@ sudoers_policy_check(int argc, char * const argv[], char *env_add[],
     char **command_infop[], char **argv_out[], char **user_env_out[],
     const char **errstr)
 {
-    int valid_flags = RUN_VALID_FLAGS;
+    unsigned int valid_flags = RUN_VALID_FLAGS;
     struct sudoers_exec_args exec_args;
     int ret;
     debug_decl(sudoers_policy_check, SUDOERS_DEBUG_PLUGIN);
