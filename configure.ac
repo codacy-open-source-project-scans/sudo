@@ -51,6 +51,7 @@ AC_SUBST([MANTYPE])dnl
 AC_SUBST([MANDIRTYPE])dnl
 AC_SUBST([MANCOMPRESS])dnl
 AC_SUBST([MANCOMPRESSEXT])dnl
+AC_SUBST([POSTINSTALL])dnl
 AC_SUBST([SHLIB_ENABLE])dnl
 AC_SUBST([SHLIB_MODE])dnl
 AC_SUBST([SUDOERS_MODE])dnl
@@ -115,6 +116,7 @@ AC_SUBST([devsearch])dnl
 AC_SUBST([SIGNAME])dnl
 AC_SUBST([PYTHON_PLUGIN], ['#'])dnl
 AC_SUBST([PYTHON_PLUGIN_SRC])dnl
+AC_SUBST([SSL_COMPAT_SRC])dnl
 AC_SUBST([LOGSRV])dnl
 AC_SUBST([LOGSRV_SRC], ['lib/logsrv'])dnl
 AC_SUBST([LOGSRVD_SRC], ['logsrvd'])dnl
@@ -256,14 +258,6 @@ CHECKSHADOW=true
 shadow_funcs=
 shadow_libs=
 OS_INIT=os_init_common
-
-dnl
-dnl LD_PRELOAD equivalents
-dnl
-RTLD_PRELOAD_VAR="LD_PRELOAD"
-RTLD_PRELOAD_ENABLE_VAR=
-RTLD_PRELOAD_DELIM=":"
-RTLD_PRELOAD_DEFAULT=
 
 dnl
 dnl libc replacement functions live in libsudo_util.a
@@ -1275,6 +1269,18 @@ AC_ARG_ENABLE(env_debug,
   esac
 ])
 
+AC_ARG_ENABLE(postinstall,
+[AS_HELP_STRING([--enable-postinstall], [Script to run after the install phase])],
+[ case "$enableval" in
+    yes)	AC_MSG_ERROR([must give --enable-postinstall an argument.])
+		;;
+    no)		AC_MSG_ERROR([--enable-postinstall not supported.])
+		;;
+    *)		POSTINSTALL="$enableval"
+		;;
+  esac
+])
+
 AC_ARG_ENABLE(zlib,
 [AS_HELP_STRING([--enable-zlib[[=PATH]]], [Whether to enable or disable zlib])],
 [], [enable_zlib=yes])
@@ -1696,7 +1702,7 @@ AC_ARG_ENABLE(intercept,
   esac
 ], [enable_intercept="$intercept_file"])
 INTERCEPTFILE="sudo_intercept.so"
-INTERCEPTDIR="`echo $intercept_file|sed -e 's:^${\([[^}]]*\)}:$(\1):' -e 's:^\(.*\)/[[^/]]*:\1:'`"
+INTERCEPTDIR="`echo $intercept_file|sed -e 's:^${\([[^}]]*\)}:$(\1):' -e 's:^\([[^:]]*\)/[[^/]].*$:\1:'`"
 
 AC_ARG_WITH(noexec, [AS_HELP_STRING([--with-noexec[[=PATH]]], [fully qualified pathname of sudo_noexec.so])],
 [case $with_noexec in
@@ -1706,7 +1712,7 @@ AC_ARG_WITH(noexec, [AS_HELP_STRING([--with-noexec[[=PATH]]], [fully qualified p
 		;;
 esac], [with_noexec="$noexec_file"])
 NOEXECFILE="sudo_noexec.so"
-NOEXECDIR="`echo $noexec_file|sed -e 's:^${\([[^}]]*\)}:$(\1):' -e 's:^\(.*\)/[[^/]]*:\1:'`"
+NOEXECDIR="`echo $noexec_file|sed -e 's:^${\([[^}]]*\)}:$(\1):' -e 's:^\([[^:]]*\)/[[^/]].*$:\1:'`"
 
 dnl
 dnl Find programs we use
@@ -1775,9 +1781,6 @@ case "$host" in
     *-*-solaris2*)
 		AC_DEFINE([PAM_SUN_CODEBASE])
 
-		# LD_PRELOAD is space-delimited
-		RTLD_PRELOAD_DELIM=" "
-
 		# illumos has a broken fmemopen(3)
 		if test X"`uname -o 2>/dev/null`" = X"illumos"; then
 		    : ${ac_cv_func_fmemopen='no'}
@@ -1821,13 +1824,6 @@ case "$host" in
 		AS_IF([test -z "$with_nsswitch" -a -z "$with_netsvc"], [
 		    with_netsvc="/etc/netsvc.conf"
 		])
-
-		# LDR_PRELOAD is only supported in AIX 5.3 and later
-		case "$OSREV" in
-		    [[1-4]].*)	with_noexec=no;;
-		    5.[[1-2]]*)	with_noexec=no;;
-		    *)		RTLD_PRELOAD_VAR="LDR_PRELOAD";;
-		esac
 
 		# cfmakeraw is broken on AIX (and is not documented)
 		: ${ac_cv_func_cfmakeraw='no'}
@@ -1890,9 +1886,6 @@ case "$host" in
 		shadow_funcs="getprpwnam dispcrypt"
 		shadow_libs="-lsecurity"
 
-		# ":DEFAULT" must be appended to _RLD_LIST
-		RTLD_PRELOAD_VAR="_RLD_LIST"
-		RTLD_PRELOAD_DEFAULT="DEFAULT"
 		: ${mansectsu='8'}
 		: ${mansectform='4'}
 		: ${mansectmisc='5'}
@@ -2017,9 +2010,7 @@ case "$host" in
 		]], [[return(0);]])], [AC_MSG_RESULT(no)], [AC_MSG_RESULT([yes, fixing locally])
 		sed 's:<acl.h>:<sys/acl.h>:g' < /usr/include/prot.h > prot.h
 		])
-		# ":DEFAULT" must be appended to _RLD_LIST
-		RTLD_PRELOAD_VAR="_RLD_LIST"
-		RTLD_PRELOAD_DEFAULT="DEFAULT"
+
 		: ${mansectsu='8'}
 		: ${mansectform='4'}
 		: ${mansectmisc='5'}
@@ -2037,9 +2028,7 @@ case "$host" in
 		AS_IF([test "$OSMAJOR" -le 4], [
 		    AC_CHECK_LIB([sun], [getpwnam], [LIBS="${LIBS} -lsun"])
 		])
-		# ":DEFAULT" must be appended to _RLD_LIST
-		RTLD_PRELOAD_VAR="_RLD_LIST"
-		RTLD_PRELOAD_DEFAULT="DEFAULT"
+
 		: ${mansectsu='1m'}
 		: ${mansectform='4'}
 		: ${mansectmisc='5'}
@@ -2222,14 +2211,6 @@ case "$host" in
 		: ${with_logincap='yes'}
 		# Darwin has a broken poll(), Apple radar 3710161
 		: ${enable_poll='no'}
-		# Darwin 8 and above can interpose library symbols cleanly
-		AS_IF([test $OSMAJOR -ge 8], [
-		    AC_DEFINE(HAVE___INTERPOSE)
-		    dlyld_interpose=yes
-		], [
-		    RTLD_PRELOAD_ENABLE_VAR="DYLD_FORCE_FLAT_NAMESPACE"
-		])
-		RTLD_PRELOAD_VAR="DYLD_INSERT_LIBRARIES"
 
 		# Build sudo_noexec.so as a shared library, not a module.
 		# On Darwin, modules and shared libraries are incompatible.
@@ -2259,8 +2240,6 @@ case "$host" in
     *-*-nextstep*)
 		# lockf() is broken on the NeXT
 		ac_cv_func_lockf=no
-		RTLD_PRELOAD_VAR="DYLD_INSERT_LIBRARIES"
-		RTLD_PRELOAD_ENABLE_VAR="DYLD_FORCE_FLAT_NAMESPACE"
 		;;
     *-*-*sysv4*)
 		: ${mansectsu='1m'}
@@ -2295,26 +2274,6 @@ case "$host" in
 		: ${mansectmisc='5'}
 		;;
 esac
-
-dnl
-dnl Library preloading to support NOEXEC
-dnl
-AS_IF([test X"$enable_intercept" = X"no"], [
-    intercept_file=disabled
-])
-AS_IF([test X"$with_noexec" = X"no"], [
-    noexec_file=disabled
-])
-AS_IF([test X"${intercept_file} ${noexec_file}" != X"disabled disabled"], [
-    SUDO_DEFINE_UNQUOTED(RTLD_PRELOAD_VAR, "$RTLD_PRELOAD_VAR")
-    SUDO_DEFINE_UNQUOTED(RTLD_PRELOAD_DELIM, '$RTLD_PRELOAD_DELIM')
-    AS_IF([test -n "$RTLD_PRELOAD_DEFAULT"], [
-	SUDO_DEFINE_UNQUOTED(RTLD_PRELOAD_DEFAULT, "$RTLD_PRELOAD_DEFAULT")
-    ])
-    AS_IF([test -n "$RTLD_PRELOAD_ENABLE_VAR"], [
-	SUDO_DEFINE_UNQUOTED(RTLD_PRELOAD_ENABLE_VAR, "$RTLD_PRELOAD_ENABLE_VAR")
-    ])
-])
 
 dnl
 dnl Check for mixing mutually exclusive and regular auth methods
@@ -2545,8 +2504,9 @@ AC_INCLUDES_DEFAULT
 SUDO_UID_T_LEN
 SUDO_SOCK_SA_LEN
 SUDO_SOCK_SIN_LEN
-AC_CHECK_SIZEOF([id_t])
+AC_CHECK_SIZEOF([long])
 AC_CHECK_SIZEOF([long long])
+AC_CHECK_SIZEOF([id_t])
 AC_CHECK_SIZEOF([time_t])
 AS_IF([test X"$ac_cv_header_utmps_h" = X"yes"], [
     SUDO_CHECK_UTMP_MEMBERS([utmps])
@@ -2554,6 +2514,101 @@ AS_IF([test X"$ac_cv_header_utmps_h" = X"yes"], [
     SUDO_CHECK_UTMP_MEMBERS([utmpx])
 ], [
     SUDO_CHECK_UTMP_MEMBERS([utmp])
+])
+
+dnl
+dnl Default values for LD_PRELOAD and related settings.
+dnl
+RTLD_PRELOAD_VAR="LD_PRELOAD"
+if test $ac_cv_sizeof_long -eq 4; then
+    RTLD_PRELOAD_VAR_32="LD_PRELOAD"
+else
+    RTLD_PRELOAD_VAR_64="LD_PRELOAD"
+fi
+RTLD_PRELOAD_ENABLE_VAR=
+RTLD_PRELOAD_DELIM=":"
+RTLD_PRELOAD_DEFAULT=
+
+dnl
+dnl System-specific LD_PRELOAD equivalents.
+dnl The below tests rely on ac_cv_sizeof_long being defined.
+dnl
+case "$host" in
+    *-*-solaris2*)
+		# LD_PRELOAD is space-delimited
+		RTLD_PRELOAD_DELIM=" "
+		RTLD_PRELOAD_VAR_32="LD_PRELOAD_32"
+		RTLD_PRELOAD_VAR_64="LD_PRELOAD_64"
+		;;
+    *-*-aix*)
+		# LDR_PRELOAD and LDR_PRELOAD64 are only supported on 
+		# AIX 5.3 and above.
+		case "$OSREV" in
+		    [[1-4]].*|5.[[1-2]]*)
+			with_noexec=no
+			;;
+		    *)
+			# AIX uses LDR_PRELOAD for 32-bit executables
+			# and LDR_PRELOAD64 for 64-bit executable.
+			RTLD_PRELOAD_VAR_32="LDR_PRELOAD"
+			RTLD_PRELOAD_VAR_64="LDR_PRELOAD64"
+			if test $ac_cv_sizeof_long -eq 4; then
+			    RTLD_PRELOAD_VAR="LDR_PRELOAD"
+			else
+			    RTLD_PRELOAD_VAR="LDR_PRELOAD64"
+			fi
+			;;
+		esac
+		;;
+    *-dec-osf*|*-*-hiuxmpp*|*-*-irix*)
+		# ":DEFAULT" must be appended to _RLD_LIST
+		RTLD_PRELOAD_VAR="_RLD_LIST"
+		RTLD_PRELOAD_DEFAULT="DEFAULT"
+		;;
+    *-*-darwin*)
+		# Darwin 8 and above can interpose library symbols cleanly
+		AS_IF([test $OSMAJOR -ge 8], [
+		    AC_DEFINE(HAVE___INTERPOSE)
+		    dlyld_interpose=yes
+		], [
+		    RTLD_PRELOAD_ENABLE_VAR="DYLD_FORCE_FLAT_NAMESPACE"
+		])
+		RTLD_PRELOAD_VAR="DYLD_INSERT_LIBRARIES"
+
+		# Build sudo_noexec.so as a shared library, not a module.
+		# On Darwin, modules and shared libraries are incompatible.
+		PRELOAD_MODULE=
+		;;
+    *-*-nextstep*)
+		RTLD_PRELOAD_VAR="DYLD_INSERT_LIBRARIES"
+		RTLD_PRELOAD_ENABLE_VAR="DYLD_FORCE_FLAT_NAMESPACE"
+		;;
+esac
+
+dnl
+dnl Library preloading to support NOEXEC
+dnl
+AS_IF([test X"$enable_intercept" = X"no"], [
+    intercept_file=disabled
+])
+AS_IF([test X"$with_noexec" = X"no"], [
+    noexec_file=disabled
+])
+AS_IF([test X"${intercept_file} ${noexec_file}" != X"disabled disabled"], [
+    SUDO_DEFINE_UNQUOTED(RTLD_PRELOAD_VAR, "$RTLD_PRELOAD_VAR")
+    if test -n "$RTLD_PRELOAD_VAR_32"; then
+	SUDO_DEFINE_UNQUOTED(RTLD_PRELOAD_VAR_32, "$RTLD_PRELOAD_VAR_32")
+    fi
+    if test -n "$RTLD_PRELOAD_VAR_64"; then
+	SUDO_DEFINE_UNQUOTED(RTLD_PRELOAD_VAR_64, "$RTLD_PRELOAD_VAR_64")
+    fi
+    SUDO_DEFINE_UNQUOTED(RTLD_PRELOAD_DELIM, '$RTLD_PRELOAD_DELIM')
+    AS_IF([test -n "$RTLD_PRELOAD_DEFAULT"], [
+	SUDO_DEFINE_UNQUOTED(RTLD_PRELOAD_DEFAULT, "$RTLD_PRELOAD_DEFAULT")
+    ])
+    AS_IF([test -n "$RTLD_PRELOAD_ENABLE_VAR"], [
+	SUDO_DEFINE_UNQUOTED(RTLD_PRELOAD_ENABLE_VAR, "$RTLD_PRELOAD_ENABLE_VAR")
+    ])
 ])
 
 dnl
@@ -4381,7 +4436,7 @@ AS_IF([test X"$INIT_SCRIPT" != X""], [
     AC_CONFIG_FILES([etc/init.d/sudo.conf])
 ])
 
-AC_CONFIG_FILES([Makefile docs/Makefile examples/Makefile examples/sudoers examples/sudo.conf examples/sudo_logsrvd.conf examples/syslog.conf include/Makefile lib/eventlog/Makefile lib/fuzzstub/Makefile lib/iolog/Makefile lib/logsrv/Makefile lib/protobuf-c/Makefile lib/util/Makefile lib/util/regress/harness lib/util/util.exp logsrvd/Makefile src/intercept.exp src/sudo_usage.h src/Makefile plugins/audit_json/Makefile plugins/sample/Makefile plugins/group_file/Makefile plugins/sample_approval/Makefile plugins/system_group/Makefile plugins/sudoers/Makefile plugins/sudoers/regress/harness plugins/sudoers/sudoers])
+AC_CONFIG_FILES([Makefile docs/Makefile examples/Makefile examples/sudoers examples/sudo.conf examples/sudo_logsrvd.conf examples/syslog.conf include/Makefile lib/eventlog/Makefile lib/fuzzstub/Makefile lib/iolog/Makefile lib/logsrv/Makefile lib/protobuf-c/Makefile lib/ssl_compat/Makefile lib/util/Makefile lib/util/regress/harness lib/util/util.exp logsrvd/Makefile src/intercept.exp src/sudo_usage.h src/Makefile plugins/audit_json/Makefile plugins/sample/Makefile plugins/group_file/Makefile plugins/sample_approval/Makefile plugins/system_group/Makefile plugins/sudoers/Makefile plugins/sudoers/regress/harness plugins/sudoers/sudoers])
 AC_CONFIG_COMMANDS([harness], [chmod +x lib/util/regress/harness plugins/sudoers/regress/harness])
 
 AC_OUTPUT
@@ -4694,6 +4749,8 @@ AH_TEMPLATE(HAVE___FUNC__, [Define to 1 if the compiler supports the C99 __func_
 AH_TEMPLATE(HAVE___INTERPOSE, [Define to 1 if you have dyld with __interpose attribute support.])
 AH_TEMPLATE(SUDO_KRB5_INSTANCE, [An instance string to append to the username (separated by a slash) for Kerberos V authentication.])
 AH_TEMPLATE(RTLD_PRELOAD_VAR, [The environment variable that controls preloading of dynamic objects.])
+AH_TEMPLATE(RTLD_PRELOAD_VAR_32, [The environment variable that controls preloading of 32-bit dynamic objects.])
+AH_TEMPLATE(RTLD_PRELOAD_VAR_64, [The environment variable that controls preloading of 64-bit dynamic objects.])
 AH_TEMPLATE(RTLD_PRELOAD_ENABLE_VAR, [An extra environment variable that is required to enable preloading (if any).])
 AH_TEMPLATE(RTLD_PRELOAD_DELIM, [The delimiter to use when defining multiple preloaded objects.])
 AH_TEMPLATE(RTLD_PRELOAD_DEFAULT, [The default value of preloaded objects (if any).])

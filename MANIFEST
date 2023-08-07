@@ -110,6 +110,7 @@ include/sudo_lbuf.h
 include/sudo_plugin.h
 include/sudo_queue.h
 include/sudo_rand.h
+include/sudo_ssl_compat.h
 include/sudo_util.h
 lib/eventlog/Makefile.in
 lib/eventlog/eventlog.c
@@ -227,6 +228,8 @@ lib/logsrv/log_server.pb-c.c
 lib/logsrv/log_server.proto
 lib/protobuf-c/Makefile.in
 lib/protobuf-c/protobuf-c.c
+lib/ssl_compat/Makefile.in
+lib/ssl_compat/ssl_compat.c
 lib/util/Makefile.in
 lib/util/aix.c
 lib/util/arc4random.c
@@ -1100,8 +1103,14 @@ plugins/sudoers/regress/testsudoers/test27.out.ok
 plugins/sudoers/regress/testsudoers/test27.sh
 plugins/sudoers/regress/testsudoers/test28.out.ok
 plugins/sudoers/regress/testsudoers/test28.sh
+plugins/sudoers/regress/testsudoers/test29.out.ok
+plugins/sudoers/regress/testsudoers/test29.sh
 plugins/sudoers/regress/testsudoers/test3.out.ok
 plugins/sudoers/regress/testsudoers/test3.sh
+plugins/sudoers/regress/testsudoers/test30.out.ok
+plugins/sudoers/regress/testsudoers/test30.sh
+plugins/sudoers/regress/testsudoers/test31.out.ok
+plugins/sudoers/regress/testsudoers/test31.sh
 plugins/sudoers/regress/testsudoers/test4.out.ok
 plugins/sudoers/regress/testsudoers/test4.sh
 plugins/sudoers/regress/testsudoers/test5.out.ok
