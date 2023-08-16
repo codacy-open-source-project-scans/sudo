@@ -54,8 +54,8 @@ runas_matches_pw(struct sudoers_parse_tree *parse_tree,
  * list, verify and kill.
  */
 static unsigned int
-sudoers_lookup_pseudo(struct sudo_nss_list *snl, struct passwd *pw,
-    time_t now, struct sudoers_lookup_callbacks *callbacks, int pwflag)
+sudoers_lookup_pseudo(struct sudo_nss_list *snl, struct passwd *pw, time_t now,
+    sudoers_lookup_callback_fn_t callback, void *cb_data, int pwflag)
 {
     char *saved_runchroot;
     struct passwd *root_pw = NULL;
@@ -72,7 +72,7 @@ sudoers_lookup_pseudo(struct sudo_nss_list *snl, struct passwd *pw,
     pwcheck = (pwflag == -1) ? never : sudo_defs_table[pwflag].sd_un.tuple;
     nopass = (pwcheck == never || pwcheck == all) ? true : false;
 
-    if (list_pw != NULL) {
+    if (runas_ctx.list_pw != NULL) {
 	root_pw = sudo_getpwuid(ROOT_UID);
 	if (root_pw == NULL)
 	    sudo_warnx(U_("unknown uid %u"), ROOT_UID);
@@ -97,18 +97,24 @@ sudoers_lookup_pseudo(struct sudo_nss_list *snl, struct passwd *pw,
 	 */
 	TAILQ_FOREACH(us, &nss->parse_tree->userspecs, entries) {
 	    int user_match = userlist_matches(nss->parse_tree, pw, &us->users);
-	    if (callbacks != NULL)
-		callbacks->cb_userspec(us, user_match);
-	    if (user_match != ALLOW)
+	    if (user_match != ALLOW) {
+		if (callback != NULL && user_match != UNSPEC) {
+		    callback(nss->parse_tree, us, user_match, NULL, UNSPEC,
+			NULL, UNSPEC, UNSPEC, UNSPEC, cb_data);
+		}
 		continue;
+	    }
 	    TAILQ_FOREACH(priv, &us->privileges, entries) {
 		int priv_nopass = UNSPEC;
 		int host_match = hostlist_matches(nss->parse_tree, pw,
 		    &priv->hostlist);
-		if (callbacks != NULL)
-		    callbacks->cb_privilege(priv, host_match);
-		if (host_match != ALLOW)
+		if (host_match != ALLOW) {
+		    if (callback != NULL) {
+			callback(nss->parse_tree, us, user_match, priv,
+			    host_match, NULL, UNSPEC, UNSPEC, UNSPEC, cb_data);
+		    }
 		    continue;
+		}
 		TAILQ_FOREACH(def, &priv->defaults, entries) {
 		    if (strcmp(def->var, "authenticate") == 0) {
 			priv_nopass = !def->op;
@@ -138,8 +144,8 @@ sudoers_lookup_pseudo(struct sudo_nss_list *snl, struct passwd *pw,
 		     * Root can list any user's privileges.
 		     * A user may always list their own privileges.
 		     */
-		    if (user_uid == 0 || list_pw == NULL ||
-			    user_uid == list_pw->pw_uid) {
+		    if (user_ctx.uid == 0 || runas_ctx.list_pw == NULL ||
+			    user_ctx.uid == runas_ctx.list_pw->pw_uid) {
 			cmnd_match = ALLOW;
 			runas_match = ALLOW;
 		    } else if (date_match != DENY) {
@@ -148,7 +154,7 @@ sudoers_lookup_pseudo(struct sudo_nss_list *snl, struct passwd *pw,
 			 * user must match the list user or root.
 			 */
 			runas_match = runas_matches_pw(nss->parse_tree, cs,
-			    list_pw);
+			    runas_ctx.list_pw);
 			switch (runas_match) {
 			case DENY:
 			    break;
@@ -176,9 +182,10 @@ sudoers_lookup_pseudo(struct sudo_nss_list *snl, struct passwd *pw,
 			    break;
 			}
 		    }
-		    if (callbacks != NULL) {
-			callbacks->cb_cmndspec(cs, date_match, runas_match,
-			    cmnd_match);
+		    if (callback != NULL) {
+			callback(nss->parse_tree, us, user_match, priv,
+			    host_match, cs, date_match, runas_match,
+			    cmnd_match, cb_data);
 		    }
 		    if (cmnd_match != UNSPEC) {
 			/*
@@ -195,7 +202,7 @@ sudoers_lookup_pseudo(struct sudo_nss_list *snl, struct passwd *pw,
     }
     if (root_pw != NULL)
 	sudo_pw_delref(root_pw);
-    if (match == ALLOW || user_uid == 0) {
+    if (match == ALLOW || user_ctx.uid == 0) {
 	/* User has an entry for this host. */
 	SET(validated, VALIDATE_SUCCESS);
     } else if (match == DENY)
@@ -222,8 +229,8 @@ init_cmnd_info(struct cmnd_info *info)
 static int
 sudoers_lookup_check(struct sudo_nss *nss, struct passwd *pw,
     unsigned int *validated, struct cmnd_info *info, time_t now,
-    struct sudoers_lookup_callbacks *callbacks, struct cmndspec **matching_cs,
-    struct defaults_list **defs)
+    sudoers_lookup_callback_fn_t callback, void *cb_data,
+    struct cmndspec **matching_cs, struct defaults_list **defs)
 {
     struct cmndspec *cs;
     struct privilege *priv;
@@ -235,20 +242,26 @@ sudoers_lookup_check(struct sudo_nss *nss, struct passwd *pw,
 
     TAILQ_FOREACH_REVERSE(us, &nss->parse_tree->userspecs, userspec_list, entries) {
 	int user_match = userlist_matches(nss->parse_tree, pw, &us->users);
-	if (callbacks != NULL)
-	    callbacks->cb_userspec(us, user_match);
-	if (user_match != ALLOW)
+	if (user_match != ALLOW) {
+	    if (callback != NULL && user_match != UNSPEC) {
+		callback(nss->parse_tree, us, user_match, NULL, UNSPEC, NULL,
+		    UNSPEC, UNSPEC, UNSPEC, cb_data);
+	    }
 	    continue;
+	}
 	CLR(*validated, FLAG_NO_USER);
 	TAILQ_FOREACH_REVERSE(priv, &us->privileges, privilege_list, entries) {
 	    int host_match = hostlist_matches(nss->parse_tree, pw,
 		&priv->hostlist);
-	    if (callbacks != NULL)
-		callbacks->cb_privilege(priv, host_match);
-	    if (host_match == ALLOW)
+	    if (host_match == ALLOW) {
 		CLR(*validated, FLAG_NO_HOST);
-	    else
+	    } else {
+		if (callback != NULL) {
+		    callback(nss->parse_tree, us, user_match, priv, host_match,
+			NULL, UNSPEC, UNSPEC, UNSPEC, cb_data);
+		}
 		continue;
+	    }
 	    TAILQ_FOREACH_REVERSE(cs, &priv->cmndlist, cmndspec_list, entries) {
 		int cmnd_match = UNSPEC;
 		int date_match = UNSPEC;
@@ -270,18 +283,21 @@ sudoers_lookup_check(struct sudo_nss *nss, struct passwd *pw,
 			    cs->runchroot, info);
 		    }
 		}
-		if (callbacks != NULL)
-		    callbacks->cb_cmndspec(cs, date_match, runas_match, cmnd_match);
+		if (callback != NULL) {
+		    callback(nss->parse_tree, us, user_match, priv, host_match,
+			cs, date_match, runas_match, cmnd_match, cb_data);
+		}
+
 		if (cmnd_match != UNSPEC) {
 		    /*
 		     * If user is running command as themselves,
-		     * set runas_pw = sudo_user.pw.
+		     * set runas_ctx.pw = user_ctx.pw.
 		     * XXX - hack, want more general solution
 		     */
 		    if (matching_user && matching_user->type == MYSELF) {
-			sudo_pw_delref(runas_pw);
-			sudo_pw_addref(sudo_user.pw);
-			runas_pw = sudo_user.pw;
+			sudo_pw_delref(runas_ctx.pw);
+			sudo_pw_addref(user_ctx.pw);
+			runas_ctx.pw = user_ctx.pw;
 		    }
 		    *matching_cs = cs;
 		    *defs = &priv->defaults;
@@ -311,93 +327,93 @@ apply_cmndspec(struct cmndspec *cs)
     if (cs != NULL) {
 #ifdef HAVE_SELINUX
 	/* Set role and type if not specified on command line. */
-	if (user_role == NULL) {
+	if (runas_ctx.role == NULL) {
 	    if (cs->role != NULL) {
-		user_role = strdup(cs->role);
-		if (user_role == NULL) {
+		runas_ctx.role = strdup(cs->role);
+		if (runas_ctx.role == NULL) {
 		    sudo_warnx(U_("%s: %s"), __func__,
 			U_("unable to allocate memory"));
 		    debug_return_bool(false);
 		}
 	    } else {
-		user_role = def_role;
+		runas_ctx.role = def_role;
 		def_role = NULL;
 	    }
-	    if (user_role != NULL) {
+	    if (runas_ctx.role != NULL) {
 		sudo_debug_printf(SUDO_DEBUG_INFO|SUDO_DEBUG_LINENO,
-		    "user_role -> %s", user_role);
+		    "runas_ctx.role -> %s", runas_ctx.role);
 	    }
 	}
-	if (user_type == NULL) {
+	if (runas_ctx.type == NULL) {
 	    if (cs->type != NULL) {
-		user_type = strdup(cs->type);
-		if (user_type == NULL) {
+		runas_ctx.type = strdup(cs->type);
+		if (runas_ctx.type == NULL) {
 		    sudo_warnx(U_("%s: %s"), __func__,
 			U_("unable to allocate memory"));
 		    debug_return_bool(false);
 		}
 	    } else {
-		user_type = def_type;
+		runas_ctx.type = def_type;
 		def_type = NULL;
 	    }
-	    if (user_type != NULL) {
+	    if (runas_ctx.type != NULL) {
 		sudo_debug_printf(SUDO_DEBUG_INFO|SUDO_DEBUG_LINENO,
-		    "user_type -> %s", user_type);
+		    "runas_ctx.type -> %s", runas_ctx.type);
 	    }
 	}
 #endif /* HAVE_SELINUX */
 #ifdef HAVE_APPARMOR
 	/* Set AppArmor profile, if specified */
 	if (cs->apparmor_profile != NULL) {
-	    user_apparmor_profile = strdup(cs->apparmor_profile);
-	    if (user_apparmor_profile == NULL) {
+	    runas_ctx.apparmor_profile = strdup(cs->apparmor_profile);
+	    if (runas_ctx.apparmor_profile == NULL) {
 		sudo_warnx(U_("%s: %s"), __func__,
 		    U_("unable to allocate memory"));
 		debug_return_bool(false);
 	    }
 	} else {
-	    user_apparmor_profile = def_apparmor_profile;
+	    runas_ctx.apparmor_profile = def_apparmor_profile;
 	    def_apparmor_profile = NULL;
 	}
-	if (user_apparmor_profile != NULL) {
+	if (runas_ctx.apparmor_profile != NULL) {
 	    sudo_debug_printf(SUDO_DEBUG_INFO|SUDO_DEBUG_LINENO,
-		"user_apparmor_profile -> %s", user_apparmor_profile);
+		"runas_ctx.apparmor_profile -> %s", runas_ctx.apparmor_profile);
 	}
 #endif
 #ifdef HAVE_PRIV_SET
 	/* Set Solaris privilege sets */
-	if (runas_privs == NULL) {
+	if (runas_ctx.privs == NULL) {
 	    if (cs->privs != NULL) {
-		runas_privs = strdup(cs->privs);
-		if (runas_privs == NULL) {
+		runas_ctx.privs = strdup(cs->privs);
+		if (runas_ctx.privs == NULL) {
 		    sudo_warnx(U_("%s: %s"), __func__,
 			U_("unable to allocate memory"));
 		    debug_return_bool(false);
 		}
 	    } else {
-		runas_privs = def_privs;
+		runas_ctx.privs = def_privs;
 		def_privs = NULL;
 	    }
-	    if (runas_privs != NULL) {
+	    if (runas_ctx.privs != NULL) {
 		sudo_debug_printf(SUDO_DEBUG_INFO|SUDO_DEBUG_LINENO,
-		    "runas_privs -> %s", runas_privs);
+		    "runas_ctx.privs -> %s", runas_ctx.privs);
 	    }
 	}
-	if (runas_limitprivs == NULL) {
+	if (runas_ctx.limitprivs == NULL) {
 	    if (cs->limitprivs != NULL) {
-		runas_limitprivs = strdup(cs->limitprivs);
-		if (runas_limitprivs == NULL) {
+		runas_ctx.limitprivs = strdup(cs->limitprivs);
+		if (runas_ctx.limitprivs == NULL) {
 		    sudo_warnx(U_("%s: %s"), __func__,
 			U_("unable to allocate memory"));
 		    debug_return_bool(false);
 		}
 	    } else {
-		runas_limitprivs = def_limitprivs;
+		runas_ctx.limitprivs = def_limitprivs;
 		def_limitprivs = NULL;
 	    }
-	    if (runas_limitprivs != NULL) {
+	    if (runas_ctx.limitprivs != NULL) {
 		sudo_debug_printf(SUDO_DEBUG_INFO|SUDO_DEBUG_LINENO,
-		    "runas_limitprivs -> %s", runas_limitprivs);
+		    "runas_ctx.limitprivs -> %s", runas_ctx.limitprivs);
 	    }
 	}
 #endif /* HAVE_PRIV_SET */
@@ -490,7 +506,7 @@ apply_cmndspec(struct cmndspec *cs)
  */
 unsigned int
 sudoers_lookup(struct sudo_nss_list *snl, struct passwd *pw, time_t now,
-    struct sudoers_lookup_callbacks *callbacks, int *cmnd_status,
+    sudoers_lookup_callback_fn_t callback, void *cb_data, int *cmnd_status,
     int pwflag)
 {
     struct defaults_list *defs = NULL;
@@ -505,8 +521,10 @@ sudoers_lookup(struct sudo_nss_list *snl, struct passwd *pw, time_t now,
     /*
      * Special case checking the "validate", "list" and "kill" pseudo-commands.
      */
-    if (pwflag)
-	debug_return_uint(sudoers_lookup_pseudo(snl, pw, now, callbacks, pwflag));
+    if (pwflag) {
+	debug_return_uint(sudoers_lookup_pseudo(snl, pw, now, callback,
+	    cb_data, pwflag));
+    }
 
     /* Need to be runas user while stat'ing things. */
     if (!set_perms(PERM_RUNAS))
@@ -520,8 +538,8 @@ sudoers_lookup(struct sudo_nss_list *snl, struct passwd *pw, time_t now,
 	    break;
 	}
 
-	m = sudoers_lookup_check(nss, pw, &validated, &info, now, callbacks,
-	    &cs, &defs);
+	m = sudoers_lookup_check(nss, pw, &validated, &info, now, callback,
+	    cb_data, &cs, &defs);
 	if (m != UNSPEC) {
 	    match = m;
 	    parse_tree = nss->parse_tree;
@@ -532,11 +550,11 @@ sudoers_lookup(struct sudo_nss_list *snl, struct passwd *pw, time_t now,
     }
     if (match != UNSPEC) {
 	if (info.cmnd_path != NULL) {
-	    /* Update user_cmnd, user_stat, cmnd_status from matching entry. */
-	    free(user_cmnd);
-	    user_cmnd = info.cmnd_path;
-	    if (user_stat != NULL)
-		*user_stat = info.cmnd_stat;
+	    /* Update cmnd, cmnd_stat, cmnd_status from matching entry. */
+	    free(user_ctx.cmnd);
+	    user_ctx.cmnd = info.cmnd_path;
+	    if (user_ctx.cmnd_stat != NULL)
+		*user_ctx.cmnd_stat = info.cmnd_stat;
 	    *cmnd_status = info.status;
 	}
 	if (defs != NULL)

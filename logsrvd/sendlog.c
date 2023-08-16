@@ -308,8 +308,8 @@ read_io_buf(struct client_closure *closure)
 	closure->bufsize = new_size;
     }
 
-    nread = iolog_read(&closure->iolog_files[timing->event], closure->buf,
-	timing->u.nbytes, &errstr);
+    nread = (size_t)iolog_read(&closure->iolog_files[timing->event],
+	closure->buf, timing->u.nbytes, &errstr);
     if (nread == (size_t)-1) {
 	sudo_warnx(U_("unable to read %s/%s: %s"), iolog_dir,
 	    iolog_fd_to_name(timing->event), errstr);
@@ -557,7 +557,7 @@ fmt_info_messages(const struct eventlog *evlog, char *hostname,
     runenv = fmt_runenv(evlog);
 
     /* The sudo I/O log info file has limited info. */
-    info_msgs_size = 13;
+    info_msgs_size = 14;
     info_msgs = calloc(info_msgs_size, sizeof(InfoMessage *));
     if (info_msgs == NULL)
 	goto oom;
@@ -610,6 +610,7 @@ fmt_info_messages(const struct eventlog *evlog, char *hostname,
 	fill_num("runuid", evlog->runuid);
     }
     fill_str("runuser", evlog->runuser);
+    fill_str("source", evlog->source);
     fill_str("submitcwd", evlog->cwd);
     fill_str("submithost", hostname);
     fill_str("submituser", evlog->submituser);
@@ -1279,14 +1280,15 @@ server_msg_cb(int fd, int what, void *v)
 #if defined(HAVE_OPENSSL)
     if (cert != NULL) {
 	SSL *ssl = closure->tls_client.ssl;
-	int err;
+	int result;
 	sudo_debug_printf(SUDO_DEBUG_INFO, "%s: reading ServerMessage (TLS)", __func__);
-        err = SSL_read_ex(ssl, buf->data + buf->len, buf->size - buf->len,
+        result = SSL_read_ex(ssl, buf->data + buf->len, buf->size - buf->len,
 	    &nread);
-        if (err) {
+        if (result <= 0) {
+	    unsigned long errcode;
 	    const char *errstr;
 
-            switch (SSL_get_error(ssl, err)) {
+            switch (SSL_get_error(ssl, result)) {
 		case SSL_ERROR_ZERO_RETURN:
 		    /* ssl connection shutdown cleanly */
 		    nread = 0;
@@ -1318,15 +1320,15 @@ server_msg_cb(int fd, int what, void *v)
                      * alert when we read ServerHello.  Convert to a more useful
                      * message and hope that no actual internal error occurs.
                      */
-                    err = ERR_get_error();
+                    errcode = ERR_get_error();
 #if !defined(HAVE_WOLFSSL)
                     if (closure->state == RECV_HELLO &&
-                        ERR_GET_REASON(err) == SSL_R_TLSV1_ALERT_INTERNAL_ERROR) {
+                        ERR_GET_REASON(errcode) == SSL_R_TLSV1_ALERT_INTERNAL_ERROR) {
                         errstr = U_("host name does not match certificate");
                     } else
 #endif
 		    {
-                        errstr = ERR_reason_error_string(err);
+                        errstr = ERR_reason_error_string(errcode);
                     }
                     sudo_warnx("%s", errstr ? errstr : strerror(errno));
                     goto bad;
@@ -1435,12 +1437,12 @@ client_msg_cb(int fd, int what, void *v)
 #if defined(HAVE_OPENSSL)
     if (cert != NULL) {
 	SSL *ssl = closure->tls_client.ssl;
-        int err = SSL_write_ex(ssl, buf->data + buf->off, buf->len - buf->off,
-	    &nwritten);
-        if (err) {
+        const int result = SSL_write_ex(ssl, buf->data + buf->off,
+	    buf->len - buf->off, &nwritten);
+        if (result <= 0) {
 	    const char *errstr;
 
-            switch (SSL_get_error(ssl, err)) {
+            switch (SSL_get_error(ssl, result)) {
 		case SSL_ERROR_ZERO_RETURN:
 		    /* ssl connection shutdown */
 		    goto bad;

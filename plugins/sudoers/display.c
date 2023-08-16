@@ -36,8 +36,8 @@
 #include <gram.h>
 
 static int
-display_priv_short(struct sudoers_parse_tree *parse_tree, struct passwd *pw,
-    struct userspec *us, struct sudo_lbuf *lbuf)
+display_priv_short(const struct sudoers_parse_tree *parse_tree,
+    const struct passwd *pw, const struct userspec *us, struct sudo_lbuf *lbuf)
 {
     struct privilege *priv;
     int nfound = 0;
@@ -103,7 +103,7 @@ display_priv_short(struct sudoers_parse_tree *parse_tree, struct passwd *pw,
  * Returns true if we should start a new long entry, else false.
  */
 static bool
-new_long_entry(struct cmndspec *cs, struct cmndspec *prev_cs)
+new_long_entry(const struct cmndspec *cs, const struct cmndspec *prev_cs)
 {
     debug_decl(new_long_entry, SUDOERS_DEBUG_PARSER);
 
@@ -140,128 +140,144 @@ new_long_entry(struct cmndspec *cs, struct cmndspec *prev_cs)
     debug_return_bool(false);
 }
 
-static int
-display_priv_long(struct sudoers_parse_tree *parse_tree, struct passwd *pw,
-    struct userspec *us, struct sudo_lbuf *lbuf)
+static void
+display_cmndspec_long(const struct sudoers_parse_tree *parse_tree,
+    const struct passwd *pw, const struct userspec *us,
+    const struct privilege *priv, const struct cmndspec *cs,
+    const struct cmndspec *prev_cs, struct sudo_lbuf *lbuf)
 {
-    struct privilege *priv;
+    const struct defaults *d;
+    const struct member *m;
+    debug_decl(display_cmndspec_long, SUDOERS_DEBUG_PARSER);
+
+    if (new_long_entry(cs, prev_cs)) {
+	unsigned int olen;
+
+	if (prev_cs != NULL)
+	    sudo_lbuf_append(lbuf, "\n");
+	if (priv->ldap_role != NULL) {
+	    sudo_lbuf_append(lbuf, _("LDAP Role: %s\n"),
+		priv->ldap_role);
+	} else {
+	    sudo_lbuf_append(lbuf, _("Sudoers entry: %s\n"),
+		us->file);
+	}
+	sudo_lbuf_append(lbuf, "%s", _("    RunAsUsers: "));
+	if (cs->runasuserlist != NULL) {
+	    TAILQ_FOREACH(m, cs->runasuserlist, entries) {
+		if (m != TAILQ_FIRST(cs->runasuserlist))
+		    sudo_lbuf_append(lbuf, ", ");
+		sudoers_format_member(lbuf, parse_tree, m, ", ",
+		    RUNASALIAS);
+	    }
+	} else if (cs->runasgrouplist == NULL) {
+	    sudo_lbuf_append(lbuf, "%s", def_runas_default);
+	} else {
+	    sudo_lbuf_append(lbuf, "%s", pw->pw_name);
+	}
+	sudo_lbuf_append(lbuf, "\n");
+	if (cs->runasgrouplist != NULL) {
+	    sudo_lbuf_append(lbuf, "%s", _("    RunAsGroups: "));
+	    TAILQ_FOREACH(m, cs->runasgrouplist, entries) {
+		if (m != TAILQ_FIRST(cs->runasgrouplist))
+		    sudo_lbuf_append(lbuf, ", ");
+		sudoers_format_member(lbuf, parse_tree, m, ", ",
+		    RUNASALIAS);
+	    }
+	    sudo_lbuf_append(lbuf, "\n");
+	}
+	olen = lbuf->len;
+	sudo_lbuf_append(lbuf, "%s", _("    Options: "));
+	TAILQ_FOREACH(d, &priv->defaults, entries) {
+	    sudoers_format_default(lbuf, d);
+	    sudo_lbuf_append(lbuf, ", ");
+	}
+	if (TAG_SET(cs->tags.setenv))
+	    sudo_lbuf_append(lbuf, "%ssetenv, ", cs->tags.setenv ? "" : "!");
+	if (TAG_SET(cs->tags.noexec))
+	    sudo_lbuf_append(lbuf, "%snoexec, ", cs->tags.noexec ? "" : "!");
+	if (TAG_SET(cs->tags.intercept))
+	    sudo_lbuf_append(lbuf, "%sintercept, ", cs->tags.intercept ? "" : "!");
+	if (TAG_SET(cs->tags.nopasswd))
+	    sudo_lbuf_append(lbuf, "%sauthenticate, ", cs->tags.nopasswd ? "!" : "");
+	if (TAG_SET(cs->tags.log_input))
+	    sudo_lbuf_append(lbuf, "%slog_input, ", cs->tags.log_input ? "" : "!");
+	if (TAG_SET(cs->tags.log_output))
+	    sudo_lbuf_append(lbuf, "%slog_output, ", cs->tags.log_output ? "" : "!");
+	if (lbuf->buf[lbuf->len - 2] == ',') {
+	    lbuf->len -= 2;	/* remove trailing ", " */
+	    sudo_lbuf_append(lbuf, "\n");
+	} else {
+	    lbuf->len = olen;	/* no options */
+	}
+#ifdef HAVE_PRIV_SET
+	if (cs->privs)
+	    sudo_lbuf_append(lbuf, "    Privs: %s\n", cs->privs);
+	if (cs->limitprivs)
+	    sudo_lbuf_append(lbuf, "    Limitprivs: %s\n", cs->limitprivs);
+#endif /* HAVE_PRIV_SET */
+#ifdef HAVE_SELINUX
+	if (cs->role)
+	    sudo_lbuf_append(lbuf, "    Role: %s\n", cs->role);
+	if (cs->type)
+	    sudo_lbuf_append(lbuf, "    Type: %s\n", cs->type);
+#endif /* HAVE_SELINUX */
+	if (cs->runchroot != NULL)
+	    sudo_lbuf_append(lbuf, "    Chroot: %s\n", cs->runchroot);
+	if (cs->runcwd != NULL)
+	    sudo_lbuf_append(lbuf, "    Cwd: %s\n", cs->runcwd);
+	if (cs->timeout > 0) {
+	    char numbuf[(((sizeof(int) * 8) + 2) / 3) + 2];
+	    (void)snprintf(numbuf, sizeof(numbuf), "%d", cs->timeout);
+	    sudo_lbuf_append(lbuf, "    Timeout: %s\n", numbuf);
+	}
+	if (cs->notbefore != UNSPEC) {
+	    char buf[sizeof("CCYYMMDDHHMMSSZ")] = "";
+	    struct tm gmt;
+	    size_t len;
+	    if (gmtime_r(&cs->notbefore, &gmt) != NULL) {
+		len = strftime(buf, sizeof(buf), "%Y%m%d%H%M%SZ", &gmt);
+		if (len != 0 && buf[sizeof(buf) - 1] == '\0')
+		    sudo_lbuf_append(lbuf, "    NotBefore: %s\n", buf);
+	    }
+	}
+	if (cs->notafter != UNSPEC) {
+	    char buf[sizeof("CCYYMMDDHHMMSSZ")] = "";
+	    struct tm gmt;
+	    size_t len;
+	    if (gmtime_r(&cs->notafter, &gmt) != NULL) {
+		len = strftime(buf, sizeof(buf), "%Y%m%d%H%M%SZ", &gmt);
+		if (len != 0 && buf[sizeof(buf) - 1] == '\0')
+		    sudo_lbuf_append(lbuf, "    NotAfter: %s\n", buf);
+	    }
+	}
+	sudo_lbuf_append(lbuf, "%s", _("    Commands:\n"));
+    }
+    sudo_lbuf_append(lbuf, "\t");
+    sudoers_format_member(lbuf, parse_tree, cs->cmnd, "\n\t",
+	CMNDALIAS);
+    sudo_lbuf_append(lbuf, "\n");
+
+    debug_return;
+}
+
+static int
+display_priv_long(const struct sudoers_parse_tree *parse_tree,
+    const struct passwd *pw, const struct userspec *us, struct sudo_lbuf *lbuf)
+{
+    const struct privilege *priv;
     int nfound = 0;
     debug_decl(display_priv_long, SUDOERS_DEBUG_PARSER);
 
     TAILQ_FOREACH(priv, &us->privileges, entries) {
-	struct cmndspec *cs, *prev_cs;
+	const struct cmndspec *cs, *prev_cs;
 
 	if (hostlist_matches(parse_tree, pw, &priv->hostlist) != ALLOW)
 	    continue;
 	prev_cs = NULL;
+	sudo_lbuf_append(lbuf, "\n");
 	TAILQ_FOREACH(cs, &priv->cmndlist, entries) {
-	    struct defaults *d;
-	    struct member *m;
-
-	    if (new_long_entry(cs, prev_cs)) {
-		unsigned int olen;
-
-		if (priv->ldap_role != NULL) {
-		    sudo_lbuf_append(lbuf, _("\nLDAP Role: %s\n"),
-			priv->ldap_role);
-		} else {
-		    sudo_lbuf_append(lbuf, "%s", _("\nSudoers entry:\n"));
-		}
-		sudo_lbuf_append(lbuf, "%s", _("    RunAsUsers: "));
-		if (cs->runasuserlist != NULL) {
-		    TAILQ_FOREACH(m, cs->runasuserlist, entries) {
-			if (m != TAILQ_FIRST(cs->runasuserlist))
-			    sudo_lbuf_append(lbuf, ", ");
-			sudoers_format_member(lbuf, parse_tree, m, ", ",
-			    RUNASALIAS);
-		    }
-		} else if (cs->runasgrouplist == NULL) {
-		    sudo_lbuf_append(lbuf, "%s", def_runas_default);
-		} else {
-		    sudo_lbuf_append(lbuf, "%s", pw->pw_name);
-		}
-		sudo_lbuf_append(lbuf, "\n");
-		if (cs->runasgrouplist != NULL) {
-		    sudo_lbuf_append(lbuf, "%s", _("    RunAsGroups: "));
-		    TAILQ_FOREACH(m, cs->runasgrouplist, entries) {
-			if (m != TAILQ_FIRST(cs->runasgrouplist))
-			    sudo_lbuf_append(lbuf, ", ");
-			sudoers_format_member(lbuf, parse_tree, m, ", ",
-			    RUNASALIAS);
-		    }
-		    sudo_lbuf_append(lbuf, "\n");
-		}
-		olen = lbuf->len;
-		sudo_lbuf_append(lbuf, "%s", _("    Options: "));
-		TAILQ_FOREACH(d, &priv->defaults, entries) {
-		    sudoers_format_default(lbuf, d);
-		    sudo_lbuf_append(lbuf, ", ");
-		}
-		if (TAG_SET(cs->tags.setenv))
-		    sudo_lbuf_append(lbuf, "%ssetenv, ", cs->tags.setenv ? "" : "!");
-		if (TAG_SET(cs->tags.noexec))
-		    sudo_lbuf_append(lbuf, "%snoexec, ", cs->tags.noexec ? "" : "!");
-		if (TAG_SET(cs->tags.intercept))
-		    sudo_lbuf_append(lbuf, "%sintercept, ", cs->tags.intercept ? "" : "!");
-		if (TAG_SET(cs->tags.nopasswd))
-		    sudo_lbuf_append(lbuf, "%sauthenticate, ", cs->tags.nopasswd ? "!" : "");
-		if (TAG_SET(cs->tags.log_input))
-		    sudo_lbuf_append(lbuf, "%slog_input, ", cs->tags.log_input ? "" : "!");
-		if (TAG_SET(cs->tags.log_output))
-		    sudo_lbuf_append(lbuf, "%slog_output, ", cs->tags.log_output ? "" : "!");
-		if (lbuf->buf[lbuf->len - 2] == ',') {
-		    lbuf->len -= 2;	/* remove trailing ", " */
-		    sudo_lbuf_append(lbuf, "\n");
-		} else {
-		    lbuf->len = olen;	/* no options */
-		}
-#ifdef HAVE_PRIV_SET
-		if (cs->privs)
-		    sudo_lbuf_append(lbuf, "    Privs: %s\n", cs->privs);
-		if (cs->limitprivs)
-		    sudo_lbuf_append(lbuf, "    Limitprivs: %s\n", cs->limitprivs);
-#endif /* HAVE_PRIV_SET */
-#ifdef HAVE_SELINUX
-		if (cs->role)
-		    sudo_lbuf_append(lbuf, "    Role: %s\n", cs->role);
-		if (cs->type)
-		    sudo_lbuf_append(lbuf, "    Type: %s\n", cs->type);
-#endif /* HAVE_SELINUX */
-		if (cs->runchroot != NULL)
-		    sudo_lbuf_append(lbuf, "    Chroot: %s\n", cs->runchroot);
-		if (cs->runcwd != NULL)
-		    sudo_lbuf_append(lbuf, "    Cwd: %s\n", cs->runcwd);
-		if (cs->timeout > 0) {
-		    char numbuf[(((sizeof(int) * 8) + 2) / 3) + 2];
-		    (void)snprintf(numbuf, sizeof(numbuf), "%d", cs->timeout);
-		    sudo_lbuf_append(lbuf, "    Timeout: %s\n", numbuf);
-		}
-		if (cs->notbefore != UNSPEC) {
-		    char buf[sizeof("CCYYMMDDHHMMSSZ")] = "";
-		    struct tm gmt;
-		    size_t len;
-		    if (gmtime_r(&cs->notbefore, &gmt) != NULL) {
-			len = strftime(buf, sizeof(buf), "%Y%m%d%H%M%SZ", &gmt);
-			if (len != 0 && buf[sizeof(buf) - 1] == '\0')
-			    sudo_lbuf_append(lbuf, "    NotBefore: %s\n", buf);
-		    }
-		}
-		if (cs->notafter != UNSPEC) {
-		    char buf[sizeof("CCYYMMDDHHMMSSZ")] = "";
-		    struct tm gmt;
-		    size_t len;
-		    if (gmtime_r(&cs->notafter, &gmt) != NULL) {
-			len = strftime(buf, sizeof(buf), "%Y%m%d%H%M%SZ", &gmt);
-			if (len != 0 && buf[sizeof(buf) - 1] == '\0')
-			    sudo_lbuf_append(lbuf, "    NotAfter: %s\n", buf);
-		    }
-		}
-		sudo_lbuf_append(lbuf, "%s", _("    Commands:\n"));
-	    }
-	    sudo_lbuf_append(lbuf, "\t");
-	    sudoers_format_member(lbuf, parse_tree, cs->cmnd, "\n\t",
-		CMNDALIAS);
-	    sudo_lbuf_append(lbuf, "\n");
+	    display_cmndspec_long(parse_tree, pw, us, priv, cs, prev_cs, lbuf);
 	    prev_cs = cs;
 	    nfound++;
 	}
@@ -270,10 +286,10 @@ display_priv_long(struct sudoers_parse_tree *parse_tree, struct passwd *pw,
 }
 
 static int
-sudo_display_userspecs(struct sudoers_parse_tree *parse_tree, struct passwd *pw,
-    struct sudo_lbuf *lbuf, bool verbose)
+sudo_display_userspecs(struct sudoers_parse_tree *parse_tree,
+    const struct passwd *pw, struct sudo_lbuf *lbuf, bool verbose)
 {
-    struct userspec *us;
+    const struct userspec *us;
     int nfound = 0;
     debug_decl(sudo_display_userspecs, SUDOERS_DEBUG_PARSER);
 
@@ -295,10 +311,10 @@ sudo_display_userspecs(struct sudoers_parse_tree *parse_tree, struct passwd *pw,
  * Display matching Defaults entries for the given user on this host.
  */
 static int
-display_defaults(struct sudoers_parse_tree *parse_tree, struct passwd *pw,
-    struct sudo_lbuf *lbuf)
+display_defaults(const struct sudoers_parse_tree *parse_tree,
+    const struct passwd *pw, struct sudo_lbuf *lbuf)
 {
-    struct defaults *d;
+    const struct defaults *d;
     const char *prefix;
     int nfound = 0;
     debug_decl(display_defaults, SUDOERS_DEBUG_PARSER);
@@ -336,12 +352,12 @@ display_defaults(struct sudoers_parse_tree *parse_tree, struct passwd *pw,
  * Display Defaults entries of the given type.
  */
 static int
-display_bound_defaults_by_type(struct sudoers_parse_tree *parse_tree,
+display_bound_defaults_by_type(const struct sudoers_parse_tree *parse_tree,
     int deftype, struct sudo_lbuf *lbuf)
 {
-    struct defaults *d;
-    struct defaults_binding *binding = NULL;
-    struct member *m;
+    const struct defaults *d;
+    const struct defaults_binding *binding = NULL;
+    const struct member *m;
     const char *dsep;
     short atype;
     int nfound = 0;
@@ -397,8 +413,8 @@ display_bound_defaults_by_type(struct sudoers_parse_tree *parse_tree,
  * Display Defaults entries that are per-runas or per-command
  */
 static int
-display_bound_defaults(struct sudoers_parse_tree *parse_tree,
-    struct passwd *pw, struct sudo_lbuf *lbuf)
+display_bound_defaults(const struct sudoers_parse_tree *parse_tree,
+    const struct passwd *pw, struct sudo_lbuf *lbuf)
 {
     int nfound = 0;
     debug_decl(display_bound_defaults, SUDOERS_DEBUG_PARSER);
@@ -434,23 +450,23 @@ output(const char *buf)
  * Returns true on success or -1 on error.
  */
 int
-display_privs(struct sudo_nss_list *snl, struct passwd *pw, bool verbose)
+display_privs(const struct sudo_nss_list *snl, struct passwd *pw, bool verbose)
 {
-    struct sudo_nss *nss;
+    const struct sudo_nss *nss;
     struct sudo_lbuf def_buf, priv_buf;
     int cols, count, n;
     unsigned int olen;
     struct stat sb;
     debug_decl(display_privs, SUDOERS_DEBUG_PARSER);
 
-    cols = sudo_user.cols;
+    cols = user_ctx.cols;
     if (fstat(STDOUT_FILENO, &sb) == 0 && S_ISFIFO(sb.st_mode))
 	cols = 0;
     sudo_lbuf_init(&def_buf, output, 4, NULL, cols);
     sudo_lbuf_init(&priv_buf, output, 8, NULL, cols);
 
     sudo_lbuf_append(&def_buf, _("Matching Defaults entries for %s on %s:\n"),
-	pw->pw_name, user_srunhost);
+	pw->pw_name, runas_ctx.shost);
     count = 0;
     TAILQ_FOREACH(nss, snl, entries) {
 	n = display_defaults(nss->parse_tree, pw, &def_buf);
@@ -486,7 +502,7 @@ display_privs(struct sudo_nss_list *snl, struct passwd *pw, bool verbose)
     /* Display privileges from all sources. */
     sudo_lbuf_append(&priv_buf,
 	_("User %s may run the following commands on %s:\n"),
-	pw->pw_name, user_srunhost);
+	pw->pw_name, runas_ctx.shost);
     count = 0;
     TAILQ_FOREACH(nss, snl, entries) {
 	if (nss->query(nss, pw) != -1) {
@@ -501,7 +517,7 @@ display_privs(struct sudo_nss_list *snl, struct passwd *pw, bool verbose)
 	priv_buf.len = 0;
 	sudo_lbuf_append(&priv_buf,
 	    _("User %s is not allowed to run sudo on %s.\n"),
-	    pw->pw_name, user_srunhost);
+	    pw->pw_name, runas_ctx.shost);
     }
     if (sudo_lbuf_error(&def_buf) || sudo_lbuf_error(&priv_buf))
 	goto bad;
@@ -521,24 +537,24 @@ bad:
 }
 
 static int
-display_cmnd_check(struct sudoers_parse_tree *parse_tree, struct passwd *pw,
-    time_t now)
+display_cmnd_check(const struct sudoers_parse_tree *parse_tree,
+    const struct passwd *pw, time_t now, struct sudoers_match_info *match_info)
 {
     int host_match, runas_match, cmnd_match = UNSPEC;
     char *saved_user_cmnd, *saved_user_base;
-    struct cmndspec *cs;
-    struct privilege *priv;
-    struct userspec *us;
+    const struct privilege *priv;
+    const struct userspec *us;
+    const struct cmndspec *cs;
     debug_decl(display_cmnd_check, SUDOERS_DEBUG_PARSER);
 
     /*
-     * For "sudo -l command", user_cmnd is "list" and the actual
-     * command we are checking is in list_cmnd.
+     * For "sudo -l command", user_ctx.cmnd is "list" and the actual
+     * command we are checking is in user_ctx.cmnd_list.
      */
-    saved_user_cmnd = user_cmnd;
-    saved_user_base = user_base;
-    user_cmnd = list_cmnd;
-    user_base = sudo_basename(user_cmnd);
+    saved_user_cmnd = user_ctx.cmnd;
+    saved_user_base = user_ctx.cmnd_base;
+    user_ctx.cmnd = user_ctx.cmnd_list;
+    user_ctx.cmnd_base = sudo_basename(user_ctx.cmnd);
 
     TAILQ_FOREACH_REVERSE(us, &parse_tree->userspecs, userspec_list, entries) {
 	if (userlist_matches(parse_tree, pw, &us->users) != ALLOW)
@@ -561,26 +577,33 @@ display_cmnd_check(struct sudoers_parse_tree *parse_tree, struct passwd *pw,
 		if (runas_match == ALLOW) {
 		    cmnd_match = cmnd_matches(parse_tree, cs->cmnd,
 			cs->runchroot, NULL);
-		    if (cmnd_match != UNSPEC)
+		    if (cmnd_match != UNSPEC) {
+			match_info->parse_tree = parse_tree;
+			match_info->us = us;
+			match_info->priv = priv;
+			match_info->cs = cs;
 			goto done;
+		    }
 		}
 	    }
 	}
     }
 done:
-    user_cmnd = saved_user_cmnd;
-    user_base = saved_user_base;
+    user_ctx.cmnd = saved_user_cmnd;
+    user_ctx.cmnd_base = saved_user_base;
     debug_return_int(cmnd_match);
 }
 
 /*
- * Check user_cmnd against sudoers and print the matching entry if the
+ * Check user_ctx.cmnd against sudoers and print the matching entry if the
  * command is allowed.
  * Returns true if the command is allowed, false if not or -1 on error.
  */
 int
-display_cmnd(struct sudo_nss_list *snl, struct passwd *pw)
+display_cmnd(const struct sudo_nss_list *snl, struct passwd *pw, bool verbose)
 {
+    struct sudoers_match_info match_info = { NULL };
+    struct sudo_lbuf lbuf;
     struct sudo_nss *nss;
     int m, match = UNSPEC;
     int ret = false;
@@ -589,13 +612,14 @@ display_cmnd(struct sudo_nss_list *snl, struct passwd *pw)
 
     /* Iterate over each source, checking for the command. */
     time(&now);
+    sudo_lbuf_init(&lbuf, output, 0, NULL, 0);
     TAILQ_FOREACH(nss, snl, entries) {
 	if (nss->query(nss, pw) == -1) {
 	    /* The query function should have printed an error message. */
 	    debug_return_int(-1);
 	}
 
-	m = display_cmnd_check(nss->parse_tree, pw, now);
+	m = display_cmnd_check(nss->parse_tree, pw, now, &match_info);
 	if (m != UNSPEC)
 	    match = m;
 
@@ -603,9 +627,18 @@ display_cmnd(struct sudo_nss_list *snl, struct passwd *pw)
 	    break;
     }
     if (match == ALLOW) {
-	const int len = sudo_printf(SUDO_CONV_INFO_MSG, "%s%s%s\n",
-	    list_cmnd, user_args ? " " : "", user_args ? user_args : "");
-	ret = len < 0 ? -1 : true;
+	if (verbose) {
+	    /* Append matching sudoers rule (long form). */
+	    display_cmndspec_long(match_info.parse_tree, pw, match_info.us,
+		match_info.priv, match_info.cs, NULL, &lbuf);
+	    sudo_lbuf_append(&lbuf, "    Matched: ");
+	}
+	sudo_lbuf_append(&lbuf, "%s%s%s\n", user_ctx.cmnd_list,
+	    user_ctx.cmnd_args ? " " : "",
+	    user_ctx.cmnd_args ? user_ctx.cmnd_args : "");
+	sudo_lbuf_print(&lbuf);
+	ret = sudo_lbuf_error(&lbuf) ? -1 : true;
+	sudo_lbuf_destroy(&lbuf);
     }
     debug_return_int(ret);
 }

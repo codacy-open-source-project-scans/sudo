@@ -3906,9 +3906,9 @@ YY_RULE_SETUP
 #line 319 "toke.l"
 {
 			    /* Only return DIGEST if the length is correct. */
-			    int digest_len =
+			    size_t digest_len =
 				sudo_digest_getlen(digest_type);
-			    if (sudoersleng == digest_len * 2) {
+			    if ((size_t)sudoersleng == digest_len * 2) {
 				if (!fill(sudoerstext, sudoersleng))
 				    yyterminate();
 				BEGIN INITIAL;
@@ -3924,7 +3924,7 @@ YY_RULE_SETUP
 #line 334 "toke.l"
 {
 			    /* Only return DIGEST if the length is correct. */
-			    int len, digest_len =
+			    size_t len, digest_len =
 				sudo_digest_getlen(digest_type);
 			    if (sudoerstext[sudoersleng - 1] == '=') {
 				/* use padding */
@@ -3933,7 +3933,7 @@ YY_RULE_SETUP
 				/* no padding */
 				len = (4 * digest_len + 2) / 3;
 			    }
-			    if (sudoersleng == len) {
+			    if ((size_t)sudoersleng == len) {
 				if (!fill(sudoerstext, sudoersleng))
 				    yyterminate();
 				BEGIN INITIAL;
@@ -5894,7 +5894,7 @@ init_lexer(void)
 }
 
 /*
- * Like strlcpy() but expand %h escapes to user_shost.
+ * Like strlcpy() but expand %h escapes to user_ctx.shost.
  */
 static size_t
 strlcpy_expand_host(char *dst, const char *src, size_t size)
@@ -5905,7 +5905,7 @@ strlcpy_expand_host(char *dst, const char *src, size_t size)
 
     while ((ch = *src++) != '\0') {
 	if (ch == '%' && *src == 'h') {
-	    size_t n = strlcpy(dst, user_shost, size);
+	    size_t n = strlcpy(dst, user_ctx.shost, size);
 	    len += n;
 	    if (n >= size) {
 		/* truncated */
@@ -5967,7 +5967,7 @@ expand_include(const char *src)
 
     if (*src == '/') {
 	/* Fully-qualified path, make a copy and expand %h escapes. */
-	dst_size = src_len + (nhost * strlen(user_shost)) - (nhost * 2) + 1;
+	dst_size = src_len + (nhost * strlen(user_ctx.shost)) - (nhost * 2) + 1;
 	dst0 = sudo_rcstr_alloc(dst_size - 1);
 	if (dst0 == NULL) {
 	    sudo_warnx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
@@ -5992,7 +5992,7 @@ expand_include(const char *src)
 	    dst_size += (size_t)(dirend - cp) + 1;
 	}
 	/* Includes space for ':' separator and NUL terminator. */
-	dst_size += src_len + (nhost * strlen(user_shost)) - (nhost * 2) + 1;
+	dst_size += src_len + (nhost * strlen(user_ctx.shost)) - (nhost * 2) + 1;
     }
 
     /* Make a copy of the fully-qualified path and return it. */

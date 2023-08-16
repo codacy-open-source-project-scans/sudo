@@ -47,7 +47,6 @@
 extern char **environ;
 extern sudo_dso_public struct policy_plugin sudoers_policy;
 
-const char *path_plugin_dir = _PATH_SUDO_PLUGIN_DIR;
 char *audit_msg;
 
 static int pass;
@@ -593,7 +592,7 @@ timestamp_remove(bool unlink_it)
 
 /* STUB */
 int
-create_admin_success_flag(void)
+create_admin_success_flag(struct passwd *pw)
 {
     return true;
 }
@@ -714,14 +713,14 @@ check_user(unsigned int validated, unsigned int mode)
 
 /* STUB */
 int
-check_user_runchroot(void)
+check_user_runchroot(const char *runchroot)
 {
     return true;
 }
 
 /* STUB */
 int
-check_user_runcwd(void)
+check_user_runcwd(const char *runcwd)
 {
     return true;
 }
@@ -807,21 +806,22 @@ audit_failure(char *const argv[], char const * restrict const fmt, ...)
 /* STUB */
 unsigned int
 sudoers_lookup(struct sudo_nss_list *snl, struct passwd *pw, time_t now,
-    struct sudoers_lookup_callbacks *callbacks, int *cmnd_status, int pwflag)
+    sudoers_lookup_callback_fn_t callback, void *cb_data, int *cmnd_status,
+    int pwflag)
 {
     return VALIDATE_SUCCESS;
 }
 
 /* STUB */
 int
-display_cmnd(struct sudo_nss_list *snl, struct passwd *pw)
+display_cmnd(const struct sudo_nss_list *snl, struct passwd *pw, bool verbose)
 {
     return true;
 }
 
 /* STUB */
 int
-display_privs(struct sudo_nss_list *snl, struct passwd *pw, bool verbose)
+display_privs(const struct sudo_nss_list *snl, struct passwd *pw, bool verbose)
 {
     return true;
 }
@@ -911,4 +911,3 @@ bsdauth_set_style(const char *style)
 {
     return;
 }
-

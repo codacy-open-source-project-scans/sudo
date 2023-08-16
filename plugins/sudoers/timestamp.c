@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: ISC
  *
- * Copyright (c) 2014-2022 Todd C. Miller <Todd.Miller@sudo.ws>
+ * Copyright (c) 2014-2023 Todd C. Miller <Todd.Miller@sudo.ws>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -405,14 +405,14 @@ ts_init_key(struct timestamp_entry *entry, struct passwd *pw,
     } else {
 	entry->flags |= TS_ANYUID;
     }
-    entry->sid = user_sid;
+    entry->sid = user_ctx.sid;
     switch (ticket_type) {
     default:
 	/* Unknown time stamp ticket type, treat as tty (should not happen). */
 	sudo_warnx("unknown time stamp ticket type %d", ticket_type);
 	FALLTHROUGH;
     case tty:
-	if (user_ttypath != NULL && stat(user_ttypath, &sb) == 0) {
+	if (user_ctx.ttypath != NULL && stat(user_ctx.ttypath, &sb) == 0) {
 	    /* tty-based time stamp */
 	    entry->type = TS_TTY;
 	    entry->u.ttydev = sb.st_rdev;
@@ -1039,7 +1039,7 @@ timestamp_remove(bool unlink_it)
 	goto done;
     }
 
-    if (asprintf(&fname, "%s/%s", def_timestampdir, user_name) == -1) {
+    if (asprintf(&fname, "%s/%s", def_timestampdir, user_ctx.name) == -1) {
 	sudo_warnx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 	ret = -1;
 	goto done;
@@ -1047,12 +1047,12 @@ timestamp_remove(bool unlink_it)
 
     /* For "sudo -K" simply unlink the time stamp file. */
     if (unlink_it) {
-	ret = unlinkat(dfd, user_name, 0) ? -1 : true;
+	ret = unlinkat(dfd, user_ctx.name, 0) ? -1 : true;
 	goto done;
     }
 
     /* Open time stamp file and lock it for exclusive access. */
-    fd = ts_openat(dfd, user_name, O_RDWR);
+    fd = ts_openat(dfd, user_ctx.name, O_RDWR);
     switch (fd) {
     case TIMESTAMP_OPEN_ERROR:
 	if (errno != ENOENT)
@@ -1107,7 +1107,7 @@ already_lectured(void)
 
     dfd = ts_secure_opendir(def_lecture_status_dir, false, true);
     if (dfd != -1) {
-	ret = fstatat(dfd, user_name, &sb, AT_SYMLINK_NOFOLLOW) == 0;
+	ret = fstatat(dfd, user_ctx.name, &sb, AT_SYMLINK_NOFOLLOW) == 0;
 	close(dfd);
     }
     debug_return_bool(ret);
@@ -1129,7 +1129,7 @@ set_lectured(void)
 	goto done;
 
     /* Create lecture file. */
-    fd = ts_openat(dfd, user_name, O_WRONLY|O_CREAT|O_EXCL);
+    fd = ts_openat(dfd, user_ctx.name, O_WRONLY|O_CREAT|O_EXCL);
     switch (fd) {
     case TIMESTAMP_OPEN_ERROR:
 	/* Failed to open, not a fatal error. */
@@ -1152,7 +1152,7 @@ done:
 
 #ifdef _PATH_SUDO_ADMIN_FLAG
 int
-create_admin_success_flag(void)
+create_admin_success_flag(struct passwd *pw)
 {
     char *flagfile;
     int ret = -1;
@@ -1163,8 +1163,7 @@ create_admin_success_flag(void)
 	debug_return_int(true);
 
     /* Check whether the user is in the sudo or admin group. */
-    if (!user_in_group(sudo_user.pw, "sudo") &&
-	!user_in_group(sudo_user.pw, "admin"))
+    if (!user_in_group(pw, "sudo") && !user_in_group(pw, "admin"))
 	debug_return_int(true);
 
     /* Build path to flag file. */
@@ -1172,7 +1171,7 @@ create_admin_success_flag(void)
 	sudo_warnx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 	debug_return_int(-1);
     }
-    if (!expand_tilde(&flagfile, user_name)) {
+    if (!expand_tilde(&flagfile, user_ctx.name)) {
 	free(flagfile);
 	debug_return_int(false);
     }
@@ -1191,7 +1190,7 @@ create_admin_success_flag(void)
 }
 #else /* !_PATH_SUDO_ADMIN_FLAG */
 int
-create_admin_success_flag(void)
+create_admin_success_flag(struct passwd *pw)
 {
     /* STUB */
     return true;

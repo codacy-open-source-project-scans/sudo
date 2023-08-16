@@ -906,6 +906,9 @@ fmt_info_messages(struct client_closure *closure, struct eventlog *evlog,
     /* TODO - rungroups */
     fill_num("runuid", evlog->runuid);
     fill_str("runuser", evlog->runuser);
+    if (evlog->source != NULL) {
+	fill_str("source", evlog->source);
+    }
     if (evlog->cwd != NULL) {
 	fill_str("submitcwd", evlog->cwd);
     }
@@ -1696,12 +1699,13 @@ server_msg_cb(int fd, int what, void *v)
     sudo_debug_printf(SUDO_DEBUG_INFO, "%s: reading ServerMessage", __func__);
 #if defined(HAVE_OPENSSL)
     if (closure->ssl != NULL) {
-        int err = SSL_read_ex(closure->ssl, buf->data + buf->len,
+        const int result = SSL_read_ex(closure->ssl, buf->data + buf->len,
 	    buf->size - buf->len, &nread);
-        if (err) {
+        if (result <= 0) {
+	    unsigned long errcode;
 	    const char *errstr;
 
-            switch (SSL_get_error(closure->ssl, nread)) {
+            switch (SSL_get_error(closure->ssl, result)) {
 		case SSL_ERROR_ZERO_RETURN:
 		    /* TLS connection shutdown cleanly */
 		    sudo_debug_printf(SUDO_DEBUG_NOTICE|SUDO_DEBUG_LINENO,
@@ -1736,15 +1740,15 @@ server_msg_cb(int fd, int what, void *v)
                      * alert when we read ServerHello.  Convert to a more useful
                      * message and hope that no actual internal error occurs.
                      */
-                    err = ERR_get_error();
+                    errcode = ERR_get_error();
 #if !defined(HAVE_WOLFSSL)
                     if (closure->state == RECV_HELLO &&
-                        ERR_GET_REASON(err) == SSL_R_TLSV1_ALERT_INTERNAL_ERROR) {
+                        ERR_GET_REASON(errcode) == SSL_R_TLSV1_ALERT_INTERNAL_ERROR) {
                         errstr = U_("host name does not match certificate");
                     } else
 #endif
 		    {
-                        errstr = ERR_reason_error_string(err);
+                        errstr = ERR_reason_error_string(errcode);
                     }
                     sudo_warnx("%s", errstr ? errstr : strerror(errno));
                     goto bad;
@@ -1861,12 +1865,12 @@ client_msg_cb(int fd, int what, void *v)
 
 #if defined(HAVE_OPENSSL)
     if (closure->ssl != NULL) {
-        int err = SSL_write_ex(closure->ssl, buf->data + buf->off,
+        const int result = SSL_write_ex(closure->ssl, buf->data + buf->off,
 	    buf->len - buf->off, &nwritten);
-        if (err) {
+        if (result <= 0) {
 	    const char *errstr;
 
-            switch (SSL_get_error(closure->ssl, err)) {
+            switch (SSL_get_error(closure->ssl, result)) {
 		case SSL_ERROR_ZERO_RETURN:
 		    /* TLS connection shutdown cleanly */
 		    sudo_debug_printf(SUDO_DEBUG_NOTICE|SUDO_DEBUG_LINENO,

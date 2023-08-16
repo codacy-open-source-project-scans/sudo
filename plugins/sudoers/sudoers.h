@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: ISC
  *
- * Copyright (c) 1993-1996, 1998-2005, 2007-2022
+ * Copyright (c) 1993-1996, 1998-2005, 2007-2023
  *	Todd C. Miller <Todd.Miller@sudo.ws>
  *
  * Permission to use, copy, modify, and distribute this software for any
@@ -79,37 +79,59 @@ struct group_list {
  * Info pertaining to the invoking user.
  * XXX - can we embed struct eventlog here or use it instead?
  */
-struct sudo_user {
+struct sudoers_user_context {
     struct timespec submit_time;
     struct passwd *pw;
-    struct passwd *_runas_pw;
-    struct group *_runas_gr;
     struct stat *cmnd_stat;
     char *cwd;
     char *name;
-    char *runas_user;
-    char *runas_group;
     char *path;
     char *tty;
     char *ttypath;
     char *host;
     char *shost;
-    char *runhost;
-    char *srunhost;
-    char *runchroot;
-    char *runcwd;
     char *prompt;
     char *cmnd;
     char *cmnd_args;
     char *cmnd_base;
     char *cmnd_dir;
     char *cmnd_list;
-    char *cmnd_safe;
     char *cmnd_saved;
-    char *class_name;
-    char *krb5_ccname;
+    char *ccname;
+    char *source;
     struct gid_list *gid_list;
     char * const * env_vars;
+    char *iolog_file;
+    char *iolog_path;
+    GETGROUPS_T *gids;
+    unsigned int flags;
+    int   ngids;
+    int   closefrom;
+    int   lines;
+    int   cols;
+    int   timeout;
+    mode_t umask;
+    uid_t uid;
+    uid_t gid;
+    pid_t sid;
+    pid_t tcpgid;
+    char uuid_str[37];
+};
+
+struct sudoers_runas_context {
+    unsigned int flags;
+    int execfd;
+    struct passwd *pw;
+    struct group *gr;
+    struct passwd *list_pw;
+    char *chroot;
+    char *class;
+    char *cmnd;
+    char *cwd;
+    char *group;
+    char *host;
+    char *shost;
+    char *user;
 #ifdef HAVE_SELINUX
     char *role;
     char *type;
@@ -121,23 +143,6 @@ struct sudo_user {
     char *privs;
     char *limitprivs;
 #endif
-    char *iolog_file;
-    char *iolog_path;
-    GETGROUPS_T *gids;
-    int   execfd;
-    int   ngids;
-    int   closefrom;
-    int   lines;
-    int   cols;
-    unsigned int   flags;
-    int   max_groups;
-    int   timeout;
-    mode_t umask;
-    uid_t uid;
-    uid_t gid;
-    pid_t sid;
-    pid_t tcpgid;
-    char uuid_str[37];
 };
 
 /*
@@ -148,13 +153,17 @@ struct sudo_user {
 #define ENTRY_TYPE_FRONTEND	0x02
 
 /*
- * sudo_user flag values
+ * user_ctx.flag values
+ */
+#define CAN_INTERCEPT_SETID	0x01U
+#define HAVE_INTERCEPT_PTRACE	0x02U
+#define USER_INTERCEPT_SETID	0x04U
+
+/*
+ * runas_ctx.flag values
  */
 #define RUNAS_USER_SPECIFIED	0x01U
 #define RUNAS_GROUP_SPECIFIED	0x02U
-#define CAN_INTERCEPT_SETID	0x04U
-#define HAVE_INTERCEPT_PTRACE	0x08U
-#define USER_INTERCEPT_SETID	0x10U
 
 /*
  * Return values for sudoers_lookup(), also used as arguments for log_auth()
@@ -222,52 +231,6 @@ struct sudo_user {
 #define PERM_TIMESTAMP		0x06
 #define PERM_IOLOG		0x07
 
-/*
- * Shortcuts for sudo_user contents.
- */
-#define user_name		(sudo_user.name)
-#define user_uid		(sudo_user.uid)
-#define user_gid		(sudo_user.gid)
-#define user_sid		(sudo_user.sid)
-#define user_tcpgid		(sudo_user.tcpgid)
-#define user_umask		(sudo_user.umask)
-#define user_passwd		(sudo_user.pw->pw_passwd)
-#define user_dir		(sudo_user.pw->pw_dir)
-#define user_gids		(sudo_user.gids)
-#define user_ngids		(sudo_user.ngids)
-#define user_gid_list		(sudo_user.gid_list)
-#define user_tty		(sudo_user.tty)
-#define user_ttypath		(sudo_user.ttypath)
-#define user_cwd		(sudo_user.cwd)
-#define user_cmnd		(sudo_user.cmnd)
-#define user_cmnd_dir		(sudo_user.cmnd_dir)
-#define user_args		(sudo_user.cmnd_args)
-#define user_base		(sudo_user.cmnd_base)
-#define user_stat		(sudo_user.cmnd_stat)
-#define user_path		(sudo_user.path)
-#define user_prompt		(sudo_user.prompt)
-#define user_host		(sudo_user.host)
-#define user_shost		(sudo_user.shost)
-#define user_runhost		(sudo_user.runhost)
-#define user_srunhost		(sudo_user.srunhost)
-#define user_ccname		(sudo_user.krb5_ccname)
-#define list_cmnd		(sudo_user.cmnd_list)
-#define safe_cmnd		(sudo_user.cmnd_safe)
-#define saved_cmnd		(sudo_user.cmnd_saved)
-#define cmnd_fd			(sudo_user.execfd)
-#define login_class		(sudo_user.class_name)
-#define runas_pw		(sudo_user._runas_pw)
-#define runas_gr		(sudo_user._runas_gr)
-#define user_role		(sudo_user.role)
-#define user_type		(sudo_user.type)
-#define user_apparmor_profile		(sudo_user.apparmor_profile)
-#define user_closefrom		(sudo_user.closefrom)
-#define	runas_privs		(sudo_user.privs)
-#define	runas_limitprivs	(sudo_user.limitprivs)
-#define user_timeout		(sudo_user.timeout)
-#define user_runchroot		(sudo_user.runchroot)
-#define user_runcwd		(sudo_user.runcwd)
-
 /* Default sudoers uid/gid/mode if not set by the Makefile. */
 #ifndef SUDOERS_UID
 # define SUDOERS_UID	0
@@ -300,8 +263,8 @@ bool user_is_exempt(void);
 
 /* check_util.c */
 bool check_user_shell(const struct passwd *pw);
-int check_user_runchroot(void);
-int check_user_runcwd(void);
+int check_user_runchroot(const char *runchroot);
+int check_user_runcwd(const char *runcwd);
 
 /* prompt.c */
 char *expand_prompt(const char *old_prompt, const char *auth_user);
@@ -360,6 +323,8 @@ void sudo_pw_addref(struct passwd *);
 void sudo_pw_delref(struct passwd *);
 int  sudo_set_gidlist(struct passwd *pw, char * const *gids, unsigned int type);
 int  sudo_set_grlist(struct passwd *pw, char * const *groups);
+int  sudo_pwutil_get_max_groups(void);
+void sudo_pwutil_set_max_groups(int);
 void sudo_pwutil_set_backend(sudo_make_pwitem_t, sudo_make_gritem_t, sudo_make_gidlist_item_t, sudo_make_grlist_item_t);
 void sudo_setspent(void);
 
@@ -404,20 +369,24 @@ void register_env_file(void * (*ef_open)(const char *), void (*ef_close)(void *)
 /* env_pattern.c */
 bool matches_env_pattern(const char *pattern, const char *var, bool *full_match);
 
-/* sudoers.c */
-FILE *open_sudoers(const char *, char **, bool, bool *);
+/* callbacks.c */
+void set_callbacks(void);
 bool cb_log_input(const char *file, int line, int column, const union sudo_defs_val *sd_un, int op);
 bool cb_log_output(const char *file, int line, int column, const union sudo_defs_val *sd_un, int op);
+
+/* sudoers.c */
+FILE *open_sudoers(const char *, char **, bool, bool *);
+bool cb_runas_default(const char *file, int line, int column, const union sudo_defs_val *sd_un, int op);
 int set_cmnd_path(const char *runchroot);
+void set_cmnd_status(const char *runchroot);
 int sudoers_init(void *info, sudoers_logger_t logger, char * const envp[]);
 int sudoers_check_cmnd(int argc, char *const argv[], char *env_add[], void *closure);
 int sudoers_list(int argc, char *const argv[], const char *list_user, bool verbose);
 int sudoers_validate_user(void);
 void sudoers_cleanup(void);
 bool sudoers_override_umask(void);
-void sudo_user_free(void);
-extern struct sudo_user sudo_user;
-extern struct passwd *list_pw;
+extern struct sudoers_user_context user_ctx;
+extern struct sudoers_runas_context runas_ctx;
 extern unsigned int sudo_mode;
 extern int sudoedit_nfiles;
 extern sudo_conv_t sudo_conv;
@@ -435,14 +404,13 @@ bool sudoers_policy_store_result(bool accepted, char *argv[], char *envp[], mode
 const struct sudoers_parser_config *policy_sudoers_conf(void);
 const char *policy_path_ldap_conf(void);
 const char *policy_path_ldap_secret(void);
+const char *policy_path_plugin_dir(void);
 
 /* group_plugin.c */
-int group_plugin_load(const char *plugin_info);
 void group_plugin_unload(void);
 int group_plugin_query(const char *user, const char *group,
     const struct passwd *pwd);
 bool cb_group_plugin(const char *file, int line, int column, const union sudo_defs_val *sd_un, int op);
-extern const char *path_plugin_dir;
 
 /* editor.c */
 char *find_editor(int nfiles, char * const *files, int *argc_out,

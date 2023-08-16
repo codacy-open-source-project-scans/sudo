@@ -246,7 +246,7 @@ PREFIX(make_gritem)(gid_t gid, const char *name)
 
 /*
  * Dynamically allocate space for a struct item plus the key and data
- * elements.  Fills in datum from user_gids or from sudo_getgrouplist2(3).
+ * elements.  Fills in datum from user_ctx.gids or from sudo_getgrouplist2(3).
  */
 struct cache_item *
 PREFIX(make_gidlist_item)(const struct passwd *pw, char * const *gidstrs,
@@ -264,7 +264,7 @@ PREFIX(make_gidlist_item)(const struct passwd *pw, char * const *gidstrs,
      * Ignore supplied gids if the entry type says we must query the group db.
      */
     if (type != ENTRY_TYPE_QUERIED && (gidstrs != NULL ||
-	    (pw == sudo_user.pw && sudo_user.gids != NULL))) {
+	    (pw == user_ctx.pw && user_ctx.gids != NULL))) {
 	if (gidstrs != NULL) {
 	    /* Use supplied gids list (string format). */
 	    ngids = 1;
@@ -290,17 +290,17 @@ PREFIX(make_gidlist_item)(const struct passwd *pw, char * const *gidstrs,
 		    gids[ngids++] = gid;
 	    }
 	} else {
-	    /* Adopt sudo_user.gids. */
-	    gids = user_gids;
-	    ngids = user_ngids;
-	    user_gids = NULL;
-	    user_ngids = 0;
+	    /* Adopt user_ctx.gids. */
+	    gids = user_ctx.gids;
+	    ngids = user_ctx.ngids;
+	    user_ctx.gids = NULL;
+	    user_ctx.ngids = 0;
 	}
 	type = ENTRY_TYPE_FRONTEND;
     } else {
 	type = ENTRY_TYPE_QUERIED;
-	if (sudo_user.max_groups > 0) {
-	    ngids = sudo_user.max_groups;
+	ngids = sudo_pwutil_get_max_groups();
+	if (ngids > 0) {
 	    gids = reallocarray(NULL, (size_t)ngids, sizeof(GETGROUPS_T));
 	    if (gids == NULL) {
 		sudo_debug_printf(SUDO_DEBUG_ERROR|SUDO_DEBUG_LINENO,
@@ -309,7 +309,7 @@ PREFIX(make_gidlist_item)(const struct passwd *pw, char * const *gidstrs,
 	    }
 	    /* Clamp to max_groups if insufficient space for all groups. */
 	    if (PREFIX(getgrouplist2)(pw->pw_name, pw->pw_gid, &gids, &ngids) == -1)
-		ngids = sudo_user.max_groups;
+		ngids = sudo_pwutil_get_max_groups();
 	} else {
 	    gids = NULL;
 	    if (PREFIX(getgrouplist2)(pw->pw_name, pw->pw_gid, &gids, &ngids) == -1) {

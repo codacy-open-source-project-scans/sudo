@@ -36,8 +36,8 @@
 
 extern struct io_plugin sudoers_io;
 
-struct sudo_user sudo_user;
-struct passwd *list_pw;
+struct sudoers_user_context user_ctx;
+struct sudoers_runas_context runas_ctx;
 sudo_printf_t sudo_printf;
 sudo_conv_t sudo_conv;
 struct sudo_plugin_event * (*plugin_event_alloc)(void);
@@ -248,9 +248,9 @@ test_endpoints(int *ntests, int *nerrors, const char *iolog_dir, char *envp[])
 
     /* Set runas uid/gid to root. */
     snprintf(runas_uid, sizeof(runas_uid), "runas_uid=%u",
-	(unsigned int)runas_pw->pw_uid);
+	(unsigned int)runas_ctx.pw->pw_uid);
     snprintf(runas_gid, sizeof(runas_gid), "runas_gid=%u",
-	(unsigned int)runas_pw->pw_gid);
+	(unsigned int)runas_ctx.pw->pw_gid);
 
     /* Set path to the iolog directory the user passed in. */
     snprintf(iolog_path, sizeof(iolog_path), "iolog_path=%s", iolog_dir);
@@ -385,15 +385,15 @@ main(int argc, char *argv[], char *envp[])
 	if ((tpw = getpwnam("root")) == NULL)
 	    sudo_fatalx("unable to look up uid 0 or root");
     }
-    sudo_user._runas_pw = pw_dup(tpw);
+    runas_ctx.pw = pw_dup(tpw);
 
     /* Set invoking user. */
     if ((tpw = getpwuid(geteuid())) == NULL)
 	sudo_fatalx("unable to look up invoking user's uid");
-    sudo_user.pw = pw_dup(tpw);
+    user_ctx.pw = pw_dup(tpw);
 
     /* Set iolog uid/gid to invoking user. */
-    iolog_set_owner(sudo_user.pw->pw_uid, sudo_user.pw->pw_gid);
+    iolog_set_owner(user_ctx.pw->pw_uid, user_ctx.pw->pw_gid);
 
     test_endpoints(&tests, &errors, iolog_dir, envp);
 
