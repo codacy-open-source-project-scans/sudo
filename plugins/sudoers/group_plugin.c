@@ -130,9 +130,9 @@ done:
  * the value from the plugin's init function.
  */
 static int
-group_plugin_load(const char *plugin_info)
+group_plugin_load(const struct sudoers_context *ctx, const char *plugin_info)
 {
-    const char *plugin_dir = policy_path_plugin_dir();
+    const char *plugin_dir = ctx->settings.plugin_dir;
     char *args, path[PATH_MAX];
     char **argv = NULL;
     int len, rc = -1;
@@ -206,7 +206,7 @@ group_plugin_load(const char *plugin_info)
             }
         }
 	if (ac != 0) {
-	    argv = reallocarray(NULL, (size_t)(ac + 1), sizeof(char *));
+	    argv = reallocarray(NULL, (size_t)ac + 1, sizeof(char *));
 	    if (argv == NULL) {
 		sudo_warnx(U_("%s: %s"), __func__,
 		    U_("unable to allocate memory"));
@@ -272,7 +272,7 @@ group_plugin_query(const char *user, const char *group,
  */
 
 static int
-group_plugin_load(const char *plugin_info)
+group_plugin_load(const struct sudoers_context *ctx, const char *plugin_info)
 {
     debug_decl(group_plugin_load, SUDOERS_DEBUG_UTIL);
     debug_return_int(false);
@@ -299,8 +299,8 @@ group_plugin_query(const char *user, const char *group,
  * Group plugin sudoers callback.
  */
 bool
-cb_group_plugin(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_group_plugin(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     bool rc = true;
     debug_decl(cb_group_plugin, SUDOERS_DEBUG_PLUGIN);
@@ -308,6 +308,6 @@ cb_group_plugin(const char *file, int line, int column,
     /* Unload any existing group plugin before loading a new one. */
     group_plugin_unload();
     if (sd_un->str != NULL)
-	rc = group_plugin_load(sd_un->str);
+	rc = group_plugin_load(ctx, sd_un->str);
     debug_return_bool(rc);
 }

@@ -76,7 +76,7 @@ group_plugin_query(const char *user, const char *group, const struct passwd *pw)
 }
 
 bool
-set_perms(int perm)
+set_perms(const struct sudoers_context *ctx, int perm)
 {
     return true;
 }
@@ -91,12 +91,6 @@ bool
 rewind_perms(void)
 {
     return true;
-}
-
-void
-timestamp_set_owner(uid_t uid, gid_t gid)
-{
-    return;
 }
 
 bool

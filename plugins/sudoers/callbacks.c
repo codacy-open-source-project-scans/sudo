@@ -95,11 +95,11 @@ resolve_host(const char *host, char **longp, char **shortp)
 
 /*
  * Look up the fully qualified domain name of user and runas hosts.
- * Sets user_ctx.host, user_ctx.shost, runas_ctx.host and runas_ctx.shost.
+ * Sets ctx->user.host, ctx->user.shost, ctx->runas.host and ctx->runas.shost.
  */
 static bool
-cb_fqdn(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_fqdn(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     bool remote;
     int rc;
@@ -111,35 +111,35 @@ cb_fqdn(const char *file, int line, int column,
 	debug_return_bool(true);
 
     /* If the -h flag was given we need to resolve both host names. */
-    remote = strcmp(runas_ctx.host, user_ctx.host) != 0;
+    remote = strcmp(ctx->runas.host, ctx->user.host) != 0;
 
-    /* First resolve user_ctx.host, setting host and shost. */
-    if (resolve_host(user_ctx.host, &lhost, &shost) != 0) {
-	if ((rc = resolve_host(runas_ctx.host, &lhost, &shost)) != 0) {
-	    gai_log_warning(SLOG_PARSE_ERROR|SLOG_RAW_MSG, rc,
-		N_("unable to resolve host %s"), user_ctx.host);
+    /* First resolve ctx->user.host, setting host and shost. */
+    if (resolve_host(ctx->user.host, &lhost, &shost) != 0) {
+	if ((rc = resolve_host(ctx->runas.host, &lhost, &shost)) != 0) {
+	    gai_log_warning(ctx, SLOG_PARSE_ERROR|SLOG_RAW_MSG, rc,
+		N_("unable to resolve host %s"), ctx->user.host);
 	    debug_return_bool(false);
 	}
     }
-    if (user_ctx.shost != user_ctx.host)
-	free(user_ctx.shost);
-    free(user_ctx.host);
-    user_ctx.host = lhost;
-    user_ctx.shost = shost;
+    if (ctx->user.shost != ctx->user.host)
+	free(ctx->user.shost);
+    free(ctx->user.host);
+    ctx->user.host = lhost;
+    ctx->user.shost = shost;
 
-    /* Next resolve runas_ctx.host, setting host and shost in runas_ctx. */
+    /* Next resolve ctx->runas.host, setting host and shost in ctx->runas. */
     lhost = shost = NULL;
     if (remote) {
-	if ((rc = resolve_host(runas_ctx.host, &lhost, &shost)) != 0) {
-	    gai_log_warning(SLOG_NO_LOG|SLOG_RAW_MSG, rc,
-		N_("unable to resolve host %s"), runas_ctx.host);
+	if ((rc = resolve_host(ctx->runas.host, &lhost, &shost)) != 0) {
+	    gai_log_warning(ctx, SLOG_NO_LOG|SLOG_RAW_MSG, rc,
+		N_("unable to resolve host %s"), ctx->runas.host);
 	    debug_return_bool(false);
 	}
     } else {
-	/* Not remote, just use user_ctx.host. */
-	if ((lhost = strdup(user_ctx.host)) != NULL) {
-	    if (user_ctx.shost != user_ctx.host)
-		shost = strdup(user_ctx.shost);
+	/* Not remote, just use ctx->user.host. */
+	if ((lhost = strdup(ctx->user.host)) != NULL) {
+	    if (ctx->user.shost != ctx->user.host)
+		shost = strdup(ctx->user.shost);
 	    else
 		shost = lhost;
 	}
@@ -152,50 +152,22 @@ cb_fqdn(const char *file, int line, int column,
 	}
     }
     if (lhost != NULL && shost != NULL) {
-	if (runas_ctx.shost != runas_ctx.host)
-	    free(runas_ctx.shost);
-	free(runas_ctx.host);
-	runas_ctx.host = lhost;
-	runas_ctx.shost = shost;
+	if (ctx->runas.shost != ctx->runas.host)
+	    free(ctx->runas.shost);
+	free(ctx->runas.host);
+	ctx->runas.host = lhost;
+	ctx->runas.shost = shost;
     }
 
     sudo_debug_printf(SUDO_DEBUG_INFO|SUDO_DEBUG_LINENO,
 	"host %s, shost %s, runas host %s, runas shost %s",
-	user_ctx.host, user_ctx.shost, runas_ctx.host, runas_ctx.shost);
+	ctx->user.host, ctx->user.shost, ctx->runas.host, ctx->runas.shost);
     debug_return_bool(true);
 }
 
 static bool
-cb_timestampowner(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
-{
-    struct passwd *pw = NULL;
-    const char *user = sd_un->str;
-    debug_decl(cb_timestampowner, SUDOERS_DEBUG_PLUGIN);
-
-    if (*user == '#') {
-	const char *errstr;
-	uid_t uid = sudo_strtoid(user + 1, &errstr);
-	if (errstr == NULL)
-	    pw = sudo_getpwuid(uid);
-    }
-    if (pw == NULL)
-	pw = sudo_getpwnam(user);
-    if (pw == NULL) {
-	log_warningx(SLOG_AUDIT|SLOG_PARSE_ERROR,
-	    N_("%s:%d:%d timestampowner: unknown user %s"), file, line,
-	    column, user);
-	debug_return_bool(false);
-    }
-    timestamp_set_owner(pw->pw_uid, pw->pw_gid);
-    sudo_pw_delref(pw);
-
-    debug_return_bool(true);
-}
-
-static bool
-cb_tty_tickets(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_tty_tickets(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_tty_tickets, SUDOERS_DEBUG_PLUGIN);
 
@@ -208,8 +180,8 @@ cb_tty_tickets(const char *file, int line, int column,
 }
 
 static bool
-cb_umask(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_umask(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_umask, SUDOERS_DEBUG_PLUGIN);
 
@@ -220,26 +192,26 @@ cb_umask(const char *file, int line, int column,
 }
 
 static bool
-cb_runchroot(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_runchroot(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_runchroot, SUDOERS_DEBUG_PLUGIN);
 
     sudo_debug_printf(SUDO_DEBUG_INFO|SUDO_DEBUG_LINENO,
 	"def_runchroot now %s", sd_un->str);
-    if (user_ctx.cmnd != NULL) {
-	/* Update user_ctx.cmnd and cmnd_status based on the new chroot. */
-	set_cmnd_status(sd_un->str);
+    if (ctx->user.cmnd != NULL) {
+	/* Update ctx->user.cmnd and cmnd_status based on the new chroot. */
+	set_cmnd_status(ctx, sd_un->str);
 	sudo_debug_printf(SUDO_DEBUG_INFO|SUDO_DEBUG_LINENO,
-	    "user_ctx.cmnd now %s", user_ctx.cmnd);
+	    "ctx->user.cmnd now %s", ctx->user.cmnd);
     }
 
     debug_return_bool(true);
 }
 
 static bool
-cb_logfile(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_logfile(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     int logtype = def_syslog ? EVLOG_SYSLOG : EVLOG_NONE;
     debug_decl(cb_logfile, SUDOERS_DEBUG_PLUGIN);
@@ -253,8 +225,8 @@ cb_logfile(const char *file, int line, int column,
 }
 
 static bool
-cb_log_format(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_log_format(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_log_format, SUDOERS_DEBUG_PLUGIN);
 
@@ -264,8 +236,8 @@ cb_log_format(const char *file, int line, int column,
 }
 
 static bool
-cb_syslog(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_syslog(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     int logtype = def_logfile ? EVLOG_FILE : EVLOG_NONE;
     debug_decl(cb_syslog, SUDOERS_DEBUG_PLUGIN);
@@ -278,8 +250,8 @@ cb_syslog(const char *file, int line, int column,
 }
 
 static bool
-cb_syslog_goodpri(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_syslog_goodpri(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_syslog_goodpri, SUDOERS_DEBUG_PLUGIN);
 
@@ -289,8 +261,8 @@ cb_syslog_goodpri(const char *file, int line, int column,
 }
 
 static bool
-cb_syslog_badpri(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_syslog_badpri(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_syslog_badpri, SUDOERS_DEBUG_PLUGIN);
 
@@ -301,8 +273,8 @@ cb_syslog_badpri(const char *file, int line, int column,
 }
 
 static bool
-cb_syslog_maxlen(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_syslog_maxlen(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_syslog_maxlen, SUDOERS_DEBUG_PLUGIN);
 
@@ -312,8 +284,8 @@ cb_syslog_maxlen(const char *file, int line, int column,
 }
 
 static bool
-cb_loglinelen(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_loglinelen(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_loglinelen, SUDOERS_DEBUG_PLUGIN);
 
@@ -323,8 +295,8 @@ cb_loglinelen(const char *file, int line, int column,
 }
 
 static bool
-cb_log_year(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_log_year(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_syslog_maxlen, SUDOERS_DEBUG_PLUGIN);
 
@@ -334,8 +306,8 @@ cb_log_year(const char *file, int line, int column,
 }
 
 static bool
-cb_log_host(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_log_host(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_syslog_maxlen, SUDOERS_DEBUG_PLUGIN);
 
@@ -345,8 +317,8 @@ cb_log_host(const char *file, int line, int column,
 }
 
 static bool
-cb_mailerpath(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_mailerpath(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_mailerpath, SUDOERS_DEBUG_PLUGIN);
 
@@ -356,8 +328,8 @@ cb_mailerpath(const char *file, int line, int column,
 }
 
 static bool
-cb_mailerflags(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_mailerflags(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_mailerflags, SUDOERS_DEBUG_PLUGIN);
 
@@ -367,8 +339,8 @@ cb_mailerflags(const char *file, int line, int column,
 }
 
 static bool
-cb_mailfrom(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_mailfrom(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_mailfrom, SUDOERS_DEBUG_PLUGIN);
 
@@ -378,8 +350,8 @@ cb_mailfrom(const char *file, int line, int column,
 }
 
 static bool
-cb_mailto(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_mailto(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_mailto, SUDOERS_DEBUG_PLUGIN);
 
@@ -389,8 +361,8 @@ cb_mailto(const char *file, int line, int column,
 }
 
 static bool
-cb_mailsub(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_mailsub(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_mailsub, SUDOERS_DEBUG_PLUGIN);
 
@@ -400,8 +372,8 @@ cb_mailsub(const char *file, int line, int column,
 }
 
 static bool
-cb_intercept_type(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_intercept_type(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_intercept_type, SUDOERS_DEBUG_PLUGIN);
 
@@ -409,7 +381,7 @@ cb_intercept_type(const char *file, int line, int column,
 	/* Set explicitly in sudoers. */
 	if (sd_un->tuple == dso) {
 	    /* Reset intercept_allow_setid default value. */
-	    if (!ISSET(user_ctx.flags, USER_INTERCEPT_SETID))
+	    if (!ISSET(ctx->settings.flags, USER_INTERCEPT_SETID))
 		def_intercept_allow_setid = false;
 	}
     }
@@ -418,23 +390,23 @@ cb_intercept_type(const char *file, int line, int column,
 }
 
 static bool
-cb_intercept_allow_setid(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_intercept_allow_setid(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_intercept_allow_setid, SUDOERS_DEBUG_PLUGIN);
 
     /* Operator will be -1 if set by front-end. */
     if (op != -1) {
 	/* Set explicitly in sudoers. */
-	SET(user_ctx.flags, USER_INTERCEPT_SETID);
+	SET(ctx->settings.flags, USER_INTERCEPT_SETID);
     }
 
     debug_return_bool(true);
 }
 
 bool
-cb_log_input(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_log_input(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_log_input, SUDOERS_DEBUG_PLUGIN);
 
@@ -445,8 +417,8 @@ cb_log_input(const char *file, int line, int column,
 }
 
 bool
-cb_log_output(const char *file, int line, int column,
-    const union sudo_defs_val *sd_un, int op)
+cb_log_output(struct sudoers_context *ctx, const char *file,
+    int line, int column, const union sudo_defs_val *sd_un, int op)
 {
     debug_decl(cb_log_output, SUDOERS_DEBUG_PLUGIN);
 
@@ -479,6 +451,7 @@ set_callbacks(void)
     /* Set locale callback. */
     sudo_defs_table[I_SUDOERS_LOCALE].callback = sudoers_locale_callback;
 
+#ifdef SESSID_MAX
     /* Set maxseq callback. */
     sudo_defs_table[I_MAXSEQ].callback = cb_maxseq;
 
@@ -490,6 +463,7 @@ set_callbacks(void)
 
     /* Set iolog_mode callback. */
     sudo_defs_table[I_IOLOG_MODE].callback = cb_iolog_mode;
+#endif /* SESSID_MAX */
 
     /* Set timestampowner callback. */
     sudo_defs_table[I_TIMESTAMPOWNER].callback = cb_timestampowner;

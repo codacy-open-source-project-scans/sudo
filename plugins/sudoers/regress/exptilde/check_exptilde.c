@@ -31,8 +31,6 @@
 
 #include <def_data.c>
 
-struct sudoers_user_context user_ctx;
-
 struct test_data {
     const char *input;
     const char *output;

@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: ISC
  *
- * Copyright (c) 2018 Todd C. Miller <Todd.Miller@sudo.ws>
+ * Copyright (c) 2018-2023 Todd C. Miller <Todd.Miller@sudo.ws>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -47,7 +47,7 @@ init_envtables(void)
 
 /* STUB */
 bool
-user_is_exempt(void)
+user_is_exempt(const struct sudoers_context *ctx)
 {
     return false;
 }
@@ -83,9 +83,9 @@ get_interfaces(void)
 
 /* STUB */
 int
-set_cmnd_path(const char *runchroot)
+set_cmnd_path(struct sudoers_context *ctx, const char *runchroot)
 {
-    /* Cannot return FOUND without also setting user_ctx.cmnd to a new value. */
+    /* Cannot return FOUND without also setting ctx->user.cmnd to a new value. */
     return NOT_FOUND;
 }
 
@@ -111,30 +111,40 @@ unpivot_root(int fds[2])
 }
 
 /*
- * Look up the hostname and set user_ctx.host and user_ctx.shost.
+ * Look up the hostname and set ctx->user.host and ctx->user.shost.
  */
 void
-get_hostname(void)
+get_hostname(struct sudoers_context *ctx)
 {
     char *cp;
     debug_decl(get_hostname, SUDOERS_DEBUG_UTIL);
 
-    if ((user_ctx.host = sudo_gethostname()) != NULL) {
-	if ((cp = strchr(user_ctx.host, '.'))) {
+    if ((ctx->user.host = sudo_gethostname()) != NULL) {
+	if ((cp = strchr(ctx->user.host, '.'))) {
 	    *cp = '\0';
-	    if ((user_ctx.shost = strdup(user_ctx.host)) == NULL)
+	    if ((ctx->user.shost = strdup(ctx->user.host)) == NULL)
 		sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 	    *cp = '.';
 	} else {
-	    user_ctx.shost = user_ctx.host;
+	    ctx->user.shost = ctx->user.host;
 	}
     } else {
-	user_ctx.host = user_ctx.shost = strdup("localhost");
-	if (user_ctx.host == NULL)
+	ctx->user.host = ctx->user.shost = strdup("localhost");
+	if (ctx->user.host == NULL)
 	    sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
     }
-    runas_ctx.host = user_ctx.host;
-    runas_ctx.shost = user_ctx.shost;
+
+    ctx->runas.host = strdup(ctx->user.host);
+    if (ctx->runas.host == NULL)
+	sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
+    if ((cp = strchr(ctx->runas.host, '.'))) {
+	*cp = '\0';
+	if ((ctx->runas.shost = strdup(ctx->runas.host)) == NULL)
+	    sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
+	*cp = '.';
+    } else {
+	ctx->runas.shost = ctx->runas.host;
+    }
 
     debug_return;
 }
