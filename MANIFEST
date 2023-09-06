@@ -621,7 +621,6 @@ plugins/sudoers/bsm_audit.h
 plugins/sudoers/callbacks.c
 plugins/sudoers/canon_path.c
 plugins/sudoers/check.c
-plugins/sudoers/check.h
 plugins/sudoers/check_aliases.c
 plugins/sudoers/check_util.c
 plugins/sudoers/cvtsudoers.c
@@ -1150,6 +1149,7 @@ plugins/sudoers/regress/visudo/test9.out.ok
 plugins/sudoers/regress/visudo/test9.sh
 plugins/sudoers/serialize_list.c
 plugins/sudoers/set_perms.c
+plugins/sudoers/sethost.c
 plugins/sudoers/solaris_audit.c
 plugins/sudoers/solaris_audit.h
 plugins/sudoers/sssd.c
@@ -1179,6 +1179,7 @@ plugins/sudoers/testsudoers_pwutil.c
 plugins/sudoers/testsudoers_pwutil.h
 plugins/sudoers/timeout.c
 plugins/sudoers/timestamp.c
+plugins/sudoers/timestamp.h
 plugins/sudoers/timestr.c
 plugins/sudoers/toke.c
 plugins/sudoers/toke.h

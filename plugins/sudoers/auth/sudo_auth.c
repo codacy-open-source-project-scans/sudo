@@ -44,7 +44,7 @@
 #include "sudoers.h"
 #include "sudo_auth.h"
 #include "insults.h"
-#include "check.h"
+#include "timestamp.h"
 
 static sudo_auth auth_switch[] = {
 /* Standalone entries first */
@@ -355,6 +355,7 @@ done:
 	case AUTH_SUCCESS:
 	    ret = true;
 	    break;
+	case AUTH_INTR:
 	case AUTH_FAILURE:
 	    if (ntries != 0)
 		SET(validated, FLAG_BAD_PASSWORD);

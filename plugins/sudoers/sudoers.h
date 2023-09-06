@@ -82,6 +82,7 @@ struct sudoers_parser_config {
     const char *sudoers_path;
     bool strict;
     bool recovery;
+    bool ignore_perms;
     int verbose;
     mode_t sudoers_mode;
     uid_t sudoers_uid;
@@ -91,6 +92,7 @@ struct sudoers_parser_config {
     NULL,	/* sudoers_path */					\
     false,	/* strict */						\
     true,	/* recovery */						\
+    false,	/* ignore_perms */					\
     1,		/* verbose level 1 */					\
     SUDOERS_MODE,							\
     SUDOERS_UID,							\
@@ -316,10 +318,6 @@ int check_user_runcwd(const char *runcwd);
 /* prompt.c */
 char *expand_prompt(const struct sudoers_context *ctx, const char *old_prompt, const char *auth_user);
 
-/* timestamp.c */
-int timestamp_remove(const struct sudoers_context *ctx, bool unlinkit);
-bool cb_timestampowner(struct sudoers_context *ctx, const char *file, int line, int column, const union sudo_defs_val *sd_un, int op);
-
 /* sudo_auth.c */
 bool sudo_auth_needs_end_session(void);
 int verify_user(const struct sudoers_context *ctx, struct passwd *pw, char *prompt, unsigned int validated, struct sudo_conv_callback *callback);
@@ -435,22 +433,17 @@ void sudoers_cleanup(void);
 bool sudoers_override_umask(void);
 const struct sudoers_context *sudoers_get_context(void);
 bool sudoers_set_mode(unsigned int flags, unsigned int mask);
-extern sudo_conv_t sudo_conv;
-extern sudo_printf_t sudo_printf;
-extern struct sudo_plugin_event * (*plugin_event_alloc)(void);
 
 /* sudoers_ctx_free.c */
 void sudoers_ctx_free(struct sudoers_context *ctx);
-
-/* sudoers_debug.c */
-bool sudoers_debug_parse_flags(struct sudo_conf_debug_file_list *debug_files, const char *entry);
-bool sudoers_debug_register(const char *plugin_path, struct sudo_conf_debug_file_list *debug_files);
-void sudoers_debug_deregister(void);
 
 /* policy.c */
 unsigned int sudoers_policy_deserialize_info(struct sudoers_context *ctx, void *v, struct defaults_list *defaults);
 bool sudoers_policy_store_result(struct sudoers_context *ctx, bool accepted, char *argv[], char *envp[], mode_t cmnd_umask, char *iolog_path, void *v);
 bool sudoers_tty_present(struct sudoers_context *ctx);
+extern sudo_conv_t sudo_conv;
+extern sudo_printf_t sudo_printf;
+extern struct sudo_plugin_event * (*plugin_event_alloc)(void);
 
 /* group_plugin.c */
 void group_plugin_unload(void);
@@ -496,5 +489,8 @@ char *serialize_list(const char *varname, struct list_members *members);
 /* pivot_root.c */
 bool pivot_root(const char *new_root, int fds[2]);
 bool unpivot_root(int fds[2]);
+
+/* sethost.c */
+bool sudoers_sethost(struct sudoers_context *ctx, const char *host, const char *remhost);
 
 #endif /* SUDOERS_SUDOERS_H */
