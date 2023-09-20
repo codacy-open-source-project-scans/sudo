@@ -1,8 +1,7 @@
 /*
  * SPDX-License-Identifier: ISC
  *
- * Copyright (c) 2009-2010, 2013-2014 Todd C. Miller <Todd.Miller@sudo.ws>
- * Copyright (c) 2009 Christian S.J. Peron
+ * Copyright (c) 2023 Todd C. Miller <Todd.Miller@sudo.ws>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,10 +16,17 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef SUDOERS_BSM_AUDIT_H
-#define	SUDOERS_BSM_AUDIT_H
+#ifndef SUDOERS_PIVOT_H
+#define SUDOERS_PIVOT_H
 
-int bsm_audit_success(const struct sudoers_context *ctx, char *const argv[]);
-int bsm_audit_failure(const struct sudoers_context *ctx, char *const argv[], const char *errmsg);
+#define SUDOERS_PIVOT_INITIALIZER { -1, -1 }
 
-#endif /* SUDOERS_BSM_AUDIT_H */
+struct sudoers_pivot {
+    int saved_root;
+    int saved_cwd;
+};
+
+bool pivot_root(const char *new_root, struct sudoers_pivot *state);
+bool unpivot_root(struct sudoers_pivot *state);
+
+#endif /* SUDOERS_PIVOT_H */

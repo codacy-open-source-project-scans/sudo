@@ -49,6 +49,7 @@
 #include "defaults.h"
 #include "logging.h"
 #include "parse.h"
+#include "pivot.h"
 
 /*
  * Info passed in from the sudo front-end.
@@ -80,10 +81,10 @@ struct group_list {
  */
 struct sudoers_parser_config {
     const char *sudoers_path;
-    bool strict;
+    int strict;
+    int verbose;
     bool recovery;
     bool ignore_perms;
-    int verbose;
     mode_t sudoers_mode;
     uid_t sudoers_uid;
     gid_t sudoers_gid;
@@ -91,9 +92,9 @@ struct sudoers_parser_config {
 #define SUDOERS_PARSER_CONFIG_INITIALIZER {				\
     NULL,	/* sudoers_path */					\
     false,	/* strict */						\
+    1,		/* verbose level 1 */					\
     true,	/* recovery */						\
     false,	/* ignore_perms */					\
-    1,		/* verbose level 1 */					\
     SUDOERS_MODE,							\
     SUDOERS_UID,							\
     SUDOERS_GID								\
@@ -137,8 +138,12 @@ struct sudoers_user_context {
     int   cols;
     int   timeout;
     mode_t umask;
+    uid_t euid;
     uid_t uid;
+    uid_t egid;
     uid_t gid;
+    pid_t pid;
+    pid_t ppid;
     pid_t sid;
     pid_t tcpgid;
 };
@@ -230,6 +235,16 @@ struct sudoers_context {
 #define FLAG_BAD_PASSWORD	0x200U
 
 /*
+ * Return values for check_user() (rowhammer resistent).
+ */
+#undef AUTH_SUCCESS
+#define AUTH_SUCCESS		0x52a2925	/* 0101001010100010100100100101 */
+#undef AUTH_FAILURE
+#define AUTH_FAILURE		0xad5d6da	/* 1010110101011101011011011010 */
+#undef AUTH_ERROR
+#define AUTH_ERROR		0x1fc8d3ac	/* 11111110010001101001110101100 */
+
+/*
  * find_path()/set_cmnd() return values
  */
 #define FOUND			0
@@ -304,14 +319,17 @@ bool sudo_goodpath(const char *path, struct stat *sbp);
 
 /* findpath.c */
 int find_path(const char *infile, char **outfile, struct stat *sbp,
-    const char *path, int ignore_dot, char * const *allowlist);
+    const char *path, bool ignore_dot, char * const *allowlist);
+
+/* resolve_cmnd.c */
+int resolve_cmnd(struct sudoers_context *ctx, const char *infile,
+    char **outfile, const char *path);
 
 /* check.c */
 int check_user(struct sudoers_context *ctx, unsigned int validated, unsigned int mode);
 bool user_is_exempt(const struct sudoers_context *ctx);
 
 /* check_util.c */
-bool check_user_shell(const struct passwd *pw);
 int check_user_runchroot(const char *runchroot);
 int check_user_runcwd(const char *runcwd);
 
@@ -345,6 +363,7 @@ typedef struct cache_item * (*sudo_make_pwitem_t)(uid_t uid, const char *user);
 typedef struct cache_item * (*sudo_make_gritem_t)(gid_t gid, const char *group);
 typedef struct cache_item * (*sudo_make_gidlist_item_t)(const struct passwd *pw, int ngids, GETGROUPS_T *gids, char * const *gidstrs, unsigned int type);
 typedef struct cache_item * (*sudo_make_grlist_item_t)(const struct passwd *pw, char * const *groups);
+typedef bool (*sudo_valid_shell_t)(const char *shell);
 sudo_dso_public struct group *sudo_getgrgid(gid_t);
 sudo_dso_public struct group *sudo_getgrnam(const char *);
 sudo_dso_public void sudo_gr_addref(struct group *);
@@ -371,8 +390,9 @@ int  sudo_set_gidlist(struct passwd *pw, int ngids, GETGROUPS_T *gids, char * co
 int  sudo_set_grlist(struct passwd *pw, char * const *groups);
 int  sudo_pwutil_get_max_groups(void);
 void sudo_pwutil_set_max_groups(int);
-void sudo_pwutil_set_backend(sudo_make_pwitem_t, sudo_make_gritem_t, sudo_make_gidlist_item_t, sudo_make_grlist_item_t);
+void sudo_pwutil_set_backend(sudo_make_pwitem_t, sudo_make_gritem_t, sudo_make_gidlist_item_t, sudo_make_grlist_item_t, sudo_valid_shell_t);
 void sudo_setspent(void);
+bool user_shell_valid(const struct passwd *pw);
 
 /* timestr.c */
 char *get_timestr(time_t, int);
@@ -415,7 +435,7 @@ void register_env_file(void * (*ef_open)(const char *), void (*ef_close)(void *)
 /* env_pattern.c */
 bool matches_env_pattern(const char *pattern, const char *var, bool *full_match);
 
-/* callbacks.c */
+/* sudoers_cb.c */
 void set_callbacks(void);
 bool cb_log_input(struct sudoers_context *ctx, const char *file, int line, int column, const union sudo_defs_val *sd_un, int op);
 bool cb_log_output(struct sudoers_context *ctx, const char *file, int line, int column, const union sudo_defs_val *sd_un, int op);
@@ -427,7 +447,7 @@ int set_cmnd_path(struct sudoers_context *ctx, const char *runchroot);
 void set_cmnd_status(struct sudoers_context *ctx, const char *runchroot);
 int sudoers_init(void *info, sudoers_logger_t logger, char * const envp[]);
 int sudoers_check_cmnd(int argc, char *const argv[], char *env_add[], void *closure);
-int sudoers_list(int argc, char *const argv[], const char *list_user, bool verbose);
+int sudoers_list(int argc, char *const argv[], const char *list_user, int verbose);
 int sudoers_validate_user(void);
 void sudoers_cleanup(void);
 bool sudoers_override_umask(void);
@@ -485,10 +505,6 @@ void unescape_string(char *str);
 
 /* serialize_list.c */
 char *serialize_list(const char *varname, struct list_members *members);
-
-/* pivot_root.c */
-bool pivot_root(const char *new_root, int fds[2]);
-bool unpivot_root(int fds[2]);
 
 /* sethost.c */
 bool sudoers_sethost(struct sudoers_context *ctx, const char *host, const char *remhost);

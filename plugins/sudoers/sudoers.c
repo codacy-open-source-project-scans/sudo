@@ -444,7 +444,7 @@ sudoers_check_common(struct sudoers_context *ctx, int pwflag)
 
     /* Check runas user's shell if running (or checking) a command. */
     if (ISSET(ctx->mode, MODE_RUN|MODE_CHECK)) {
-	if (!check_user_shell(ctx->runas.pw)) {
+	if (!user_shell_valid(ctx->runas.pw)) {
 	    log_warningx(ctx, SLOG_RAW_MSG|SLOG_AUDIT,
 		N_("invalid shell for user %s: %s"),
 		ctx->runas.pw->pw_name, ctx->runas.pw->pw_shell);
@@ -466,10 +466,10 @@ sudoers_check_common(struct sudoers_context *ctx, int pwflag)
 
     /* Require a password if sudoers says so.  */
     switch (check_user(ctx, validated, ctx->mode)) {
-    case true:
+    case AUTH_SUCCESS:
 	/* user authenticated successfully. */
 	break;
-    case false:
+    case AUTH_FAILURE:
 	/* Note: log_denial() calls audit for us. */
 	if (!ISSET(validated, VALIDATE_SUCCESS)) {
 	    /* Only display a denial message if no password was read. */
@@ -908,7 +908,7 @@ done:
  * -2 for usage error.
  */
 int
-sudoers_list(int argc, char * const argv[], const char *list_user, bool verbose)
+sudoers_list(int argc, char * const argv[], const char *list_user, int verbose)
 {
     struct passwd *pw;
     int ret = -1;
@@ -1062,10 +1062,11 @@ init_vars(struct sudoers_context *ctx, char * const envp[])
 int
 set_cmnd_path(struct sudoers_context *ctx, const char *runchroot)
 {
+    struct sudoers_pivot pivot_state = SUDOERS_PIVOT_INITIALIZER;
     const char *cmnd_in;
     char *cmnd_out = NULL;
     char *path = ctx->user.path;
-    int ret, pivot_fds[2];
+    int ret;
     debug_decl(set_cmnd_path, SUDOERS_DEBUG_PLUGIN);
 
     cmnd_in = ISSET(ctx->mode, MODE_CHECK) ?
@@ -1082,27 +1083,12 @@ set_cmnd_path(struct sudoers_context *ctx, const char *runchroot)
 
     /* Pivot root. */
     if (runchroot != NULL) {
-	if (!pivot_root(runchroot, pivot_fds))
+	if (!pivot_root(runchroot, &pivot_state))
 	    goto error;
     }
 
-    if (!set_perms(ctx, PERM_RUNAS))
-	goto error;
-    ret = find_path(cmnd_in, &cmnd_out, ctx->user.cmnd_stat, path,
-	def_ignore_dot, NULL);
-    if (!restore_perms())
-	goto error;
-    if (ret == NOT_FOUND) {
-	/* Failed as root, try as invoking user. */
-	if (!set_perms(ctx, PERM_USER))
-	    goto error;
-	ret = find_path(cmnd_in, &cmnd_out, ctx->user.cmnd_stat, path,
-	    def_ignore_dot, NULL);
-	if (!restore_perms())
-	    goto error;
-    }
-
-    if (cmnd_out != NULL) {
+    ret = resolve_cmnd(ctx, cmnd_in, &cmnd_out, path);
+    if (ret == FOUND) {
 	char *slash = strrchr(cmnd_out, '/');
 	if (slash != NULL) {
 	    *slash = '\0';
@@ -1120,12 +1106,12 @@ set_cmnd_path(struct sudoers_context *ctx, const char *runchroot)
 
     /* Restore root. */
     if (runchroot != NULL)
-	(void)unpivot_root(pivot_fds);
+	(void)unpivot_root(&pivot_state);
 
     debug_return_int(ret);
 error:
     if (runchroot != NULL)
-	(void)unpivot_root(pivot_fds);
+	(void)unpivot_root(&pivot_state);
     free(cmnd_out);
     debug_return_int(NOT_FOUND_ERROR);
 }

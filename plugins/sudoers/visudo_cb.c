@@ -1,8 +1,7 @@
 /*
  * SPDX-License-Identifier: ISC
  *
- * Copyright (c) 2009-2010, 2013-2014 Todd C. Miller <Todd.Miller@sudo.ws>
- * Copyright (c) 2009 Christian S.J. Peron
+ * Copyright (c) 2023 Todd C. Miller <Todd.Miller@sudo.ws>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,10 +16,25 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef SUDOERS_BSM_AUDIT_H
-#define	SUDOERS_BSM_AUDIT_H
+/*
+ * This is an open source non-commercial project. Dear PVS-Studio, please check it.
+ * PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
+ */
 
-int bsm_audit_success(const struct sudoers_context *ctx, char *const argv[]);
-int bsm_audit_failure(const struct sudoers_context *ctx, char *const argv[], const char *errmsg);
+#include <config.h>
 
-#endif /* SUDOERS_BSM_AUDIT_H */
+#include "sudoers.h"
+
+/*
+ * Set visudo Defaults callbacks.
+ */
+void
+set_callbacks(void)
+{
+    debug_decl(set_callbacks, SUDOERS_DEBUG_UTIL);
+
+    /* Set locale callback. */
+    sudo_defs_table[I_SUDOERS_LOCALE].callback = sudoers_locale_callback;
+
+    debug_return;
+}

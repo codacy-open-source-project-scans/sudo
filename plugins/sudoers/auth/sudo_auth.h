@@ -19,13 +19,11 @@
 #ifndef SUDO_AUTH_H
 #define SUDO_AUTH_H
 
-/* Auth function return values.  */
-#define AUTH_SUCCESS		0
-#define AUTH_FAILURE		1
-#define AUTH_INTR		2
-#define AUTH_ERROR		3
-#define AUTH_NONINTERACTIVE	4
+/* Private auth function return values (rowhammer resistent).  */
+#define AUTH_INTR		0x69d61fc8	/* 1101001110101100001111111001000 */
+#define AUTH_NONINTERACTIVE	0x1629e037	/* 0010110001010011110000000110111 */
 
+struct sudoers_context;
 typedef struct sudo_auth {
     unsigned int flags;		/* various flags, see below */
     int status;			/* status from verify routine */

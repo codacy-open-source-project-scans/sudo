@@ -24,6 +24,15 @@
 #ifndef SUDOERS_TIMESTAMP_H
 #define SUDOERS_TIMESTAMP_H
 
+struct passwd;
+struct sudoers_context;
+struct getpass_closure {
+    int lectured;
+    void *cookie;
+    struct passwd *auth_pw;
+    const struct sudoers_context *ctx;
+};
+
 /* Status codes for timestamp_status() */
 #define TS_CURRENT		0
 #define TS_OLD			1
@@ -77,7 +86,6 @@ struct timestamp_entry {
     } u;
 };
 
-struct sudoers_context;
 union sudo_defs_val;
 void *timestamp_open(const struct sudoers_context *ctx);
 void  timestamp_close(void *vcookie);

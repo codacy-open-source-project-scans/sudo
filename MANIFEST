@@ -618,7 +618,6 @@ plugins/sudoers/b64_encode.c
 plugins/sudoers/boottime.c
 plugins/sudoers/bsm_audit.c
 plugins/sudoers/bsm_audit.h
-plugins/sudoers/callbacks.c
 plugins/sudoers/canon_path.c
 plugins/sudoers/check.c
 plugins/sudoers/check_aliases.c
@@ -685,7 +684,9 @@ plugins/sudoers/match_digest.c
 plugins/sudoers/mkdefaults
 plugins/sudoers/parse.h
 plugins/sudoers/parse_ldif.c
+plugins/sudoers/parser_warnx.c
 plugins/sudoers/pivot.c
+plugins/sudoers/pivot.h
 plugins/sudoers/po/README
 plugins/sudoers/po/ast.mo
 plugins/sudoers/po/ast.po
@@ -1147,6 +1148,7 @@ plugins/sudoers/regress/visudo/test8.out.ok
 plugins/sudoers/regress/visudo/test8.sh
 plugins/sudoers/regress/visudo/test9.out.ok
 plugins/sudoers/regress/visudo/test9.sh
+plugins/sudoers/resolve_cmnd.c
 plugins/sudoers/serialize_list.c
 plugins/sudoers/set_perms.c
 plugins/sudoers/sethost.c
@@ -1168,6 +1170,7 @@ plugins/sudoers/sudoers.c
 plugins/sudoers/sudoers.exp
 plugins/sudoers/sudoers.h
 plugins/sudoers/sudoers.in
+plugins/sudoers/sudoers_cb.c
 plugins/sudoers/sudoers_ctx_free.c
 plugins/sudoers/sudoers_debug.c
 plugins/sudoers/sudoers_debug.h
@@ -1190,6 +1193,7 @@ plugins/sudoers/tsgetgrpw.c
 plugins/sudoers/tsgetgrpw.h
 plugins/sudoers/unesc_str.c
 plugins/sudoers/visudo.c
+plugins/sudoers/visudo_cb.c
 plugins/system_group/Makefile.in
 plugins/system_group/system_group.c
 plugins/system_group/system_group.exp

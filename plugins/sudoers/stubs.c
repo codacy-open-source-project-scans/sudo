@@ -35,7 +35,6 @@
 #include <arpa/inet.h>
 
 #include "sudoers.h"
-#include "cvtsudoers.h"
 #include "interfaces.h"
 
 /* STUB */
@@ -98,14 +97,14 @@ init_eventlog_config(void)
 
 /* STUB */
 bool
-pivot_root(const char *new_root, int fds[2])
+pivot_root(const char *new_root, struct sudoers_pivot *state)
 {
     return true;
 }
 
 /* STUB */
 bool
-unpivot_root(int fds[2])
+unpivot_root(struct sudoers_pivot *state)
 {
     return true;
 }

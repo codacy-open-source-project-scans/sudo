@@ -711,7 +711,7 @@ int
 check_user(struct sudoers_context *ctx, unsigned int validated,
     unsigned int mode)
 {
-    return true;
+    return AUTH_SUCCESS;
 }
 
 /* STUB */
@@ -724,13 +724,6 @@ check_user_runchroot(const char *runchroot)
 /* STUB */
 int
 check_user_runcwd(const char *runcwd)
-{
-    return true;
-}
-
-/* STUB */
-bool
-check_user_shell(const struct passwd *pw)
 {
     return true;
 }
@@ -823,7 +816,7 @@ sudoers_lookup(struct sudo_nss_list *snl, struct sudoers_context *ctx,
 /* STUB */
 int
 display_cmnd(struct sudoers_context *ctx, const struct sudo_nss_list *snl,
-    struct passwd *pw, bool verbose)
+    struct passwd *pw, int verbose)
 {
     return true;
 }
@@ -831,7 +824,7 @@ display_cmnd(struct sudoers_context *ctx, const struct sudo_nss_list *snl,
 /* STUB */
 int
 display_privs(struct sudoers_context *ctx, const struct sudo_nss_list *snl,
-    struct passwd *pw, bool verbose)
+    struct passwd *pw, int verbose)
 {
     return true;
 }
@@ -839,7 +832,7 @@ display_privs(struct sudoers_context *ctx, const struct sudo_nss_list *snl,
 /* STUB */
 int
 find_path(const char *infile, char **outfile, struct stat *sbp,
-    const char *path, int ignore_dot, char * const *allowlist)
+    const char *path, bool ignore_dot, char * const *allowlist)
 {
     switch (pass) {
     case PASS_CHECK_NOT_FOUND:
@@ -857,6 +850,14 @@ find_path(const char *infile, char **outfile, struct stat *sbp,
 	    return NOT_FOUND_ERROR;
 	return FOUND;
     }
+}
+
+/* STUB */
+int
+resolve_cmnd(struct sudoers_context *ctx, const char *infile, char **outfile,
+    const char *path)
+{
+    return find_path(infile, outfile, NULL, path, false, NULL);
 }
 
 /* STUB */

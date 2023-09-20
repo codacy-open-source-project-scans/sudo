@@ -58,13 +58,13 @@ init_eventlog_config(void)
 }
 
 bool
-pivot_root(const char *new_root, int fds[2])
+pivot_root(const char *new_root, struct sudoers_pivot *state)
 {
     return true;
 }
 
 bool
-unpivot_root(int fds[2])
+unpivot_root(struct sudoers_pivot *state)
 {
     return true;
 }

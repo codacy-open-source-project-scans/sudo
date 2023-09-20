@@ -36,14 +36,27 @@
 # define SUDOERS_NAME_MATCH
 #endif
 
+/* Allowed by policy (rowhammer resistent). */
+#undef ALLOW
+#define ALLOW	 0x52a2925	/* 0101001010100010100100100101 */
+
+/* Denied by policy (rowhammer resistent). */
+#undef DENY
+#define DENY	 0xad5d6da	/* 1010110101011101011011011010 */
+
+/* Neither allowed, nor denied. */
 #undef UNSPEC
 #define UNSPEC	-1
-#undef DENY
-#define DENY	 0
-#undef ALLOW
-#define ALLOW	 1
+
+/* Tag implied by root access (SETENV only). */
 #undef IMPLIED
 #define IMPLIED	 2
+
+/*
+ * We must explicitly check against ALLOW and DENY instead testing
+ * that the value is not UNSPEC to avoid potential ROWHAMMER issues.
+ */
+#define SPECIFIED(_v)	((_v) == ALLOW || (_v) == DENY)
 
 /*
  * Initialize all tags to UNSPEC.
@@ -94,7 +107,7 @@
  * Returns true if the specified tag is not UNSPEC or IMPLIED, else false.
  */
 #define TAG_SET(tt) \
-    ((tt) != UNSPEC && (tt) != IMPLIED)
+    ((tt) == true || (tt) == false)
 
 /*
  * Returns true if any tags set in nt differ between ot and nt, else false.
@@ -412,22 +425,22 @@ bool sudoers_error_recovery(void);
 bool sudoers_strict(void);
 
 /* match_addr.c */
-bool addr_matches(char *n);
+int addr_matches(char *n);
 
 /* match_command.c */
-bool command_matches(struct sudoers_context *ctx, const char *sudoers_cmnd, const char *sudoers_args, const char *runchroot, struct cmnd_info *info, const struct command_digest_list *digests);
+int command_matches(struct sudoers_context *ctx, const char *sudoers_cmnd, const char *sudoers_args, const char *runchroot, struct cmnd_info *info, const struct command_digest_list *digests);
 
 /* match_digest.c */
-bool digest_matches(int fd, const char *path, const struct command_digest_list *digests);
+int digest_matches(int fd, const char *path, const struct command_digest_list *digests);
 
 /* match.c */
 struct group;
 struct passwd;
-bool group_matches(const char *sudoers_group, const struct group *gr);
-bool hostname_matches(const char *shost, const char *lhost, const char *pattern);
-bool netgr_matches(const struct sudo_nss *nss, const char *netgr, const char *lhost, const char *shost, const char *user);
-bool usergr_matches(const char *group, const char *user, const struct passwd *pw);
-bool userpw_matches(const char *sudoers_user, const char *user, const struct passwd *pw);
+int group_matches(const char *sudoers_group, const struct group *gr);
+int hostname_matches(const char *shost, const char *lhost, const char *pattern);
+int netgr_matches(const struct sudo_nss *nss, const char *netgr, const char *lhost, const char *shost, const char *user);
+int usergr_matches(const char *group, const char *user, const struct passwd *pw);
+int userpw_matches(const char *sudoers_user, const char *user, const struct passwd *pw);
 int cmnd_matches(const struct sudoers_parse_tree *parse_tree, const struct member *m, const char *runchroot, struct cmnd_info *info);
 int cmnd_matches_all(const struct sudoers_parse_tree *parse_tree, const struct member *m, const char *runchroot, struct cmnd_info *info);
 int cmndlist_matches(const struct sudoers_parse_tree *parse_tree, const struct member_list *list, const char *runchroot, struct cmnd_info *info);
@@ -466,8 +479,8 @@ struct sudo_nss_list;
 unsigned int sudoers_lookup(struct sudo_nss_list *snl, struct sudoers_context *ctx, time_t now, sudoers_lookup_callback_fn_t callback, void *cb_data, int *cmnd_status, int pwflag);
 
 /* display.c */
-int display_privs(struct sudoers_context *ctx, const struct sudo_nss_list *snl, struct passwd *pw, bool verbose);
-int display_cmnd(struct sudoers_context *ctx, const struct sudo_nss_list *snl, struct passwd *pw, bool verbose);
+int display_privs(struct sudoers_context *ctx, const struct sudo_nss_list *snl, struct passwd *pw, int verbose);
+int display_cmnd(struct sudoers_context *ctx, const struct sudo_nss_list *snl, struct passwd *pw, int verbose);
 
 /* parse_ldif.c */
 bool sudoers_parse_ldif(struct sudoers_parse_tree *parse_tree, FILE *fp, const char *sudoers_base, bool store_options);
@@ -485,5 +498,9 @@ bool sudoers_format_privilege(struct sudo_lbuf *lbuf, const struct sudoers_parse
 bool sudoers_format_userspec(struct sudo_lbuf *lbuf, const struct sudoers_parse_tree *parse_tree, const struct userspec *us, bool expand_aliases);
 bool sudoers_format_userspecs(struct sudo_lbuf *lbuf, const struct sudoers_parse_tree *parse_tree, const char *separator, bool expand_aliases, bool flush);
 bool sudoers_format_default_line(struct sudo_lbuf *lbuf, const struct sudoers_parse_tree *parse_tree, const struct defaults *d, struct defaults **next, bool expand_aliases);
+
+/* parser_warnx.c */
+bool parser_warnx(const struct sudoers_context *ctx, const char *file, int line, int column, bool strict, bool quiet, const char * restrict fmt, ...) sudo_printflike(7, 8);
+bool parser_vwarnx(const struct sudoers_context *ctx, const char *file, int line, int column, bool strict, bool quiet, const char * restrict fmt, va_list ap) sudo_printflike(7, 0);
 
 #endif /* SUDOERS_PARSE_H */
