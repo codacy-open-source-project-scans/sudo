@@ -29,27 +29,27 @@
 #ifdef HAVE_STDBOOL_H
 # include <stdbool.h>
 #else
-# include "compat/stdbool.h"
+# include <compat/stdbool.h>
 #endif /* HAVE_STDBOOL_H */
 
 #define DEFAULT_TEXT_DOMAIN	"sudoers"
 
-#include "pathnames.h"
-#include "sudo_compat.h"
-#include "sudo_conf.h"
-#include "sudo_eventlog.h"
-#include "sudo_fatal.h"
-#include "sudo_gettext.h"
-#include "sudo_nss.h"
-#include "sudo_plugin.h"
-#include "sudo_queue.h"
-#include "sudo_util.h"
-#include "sudoers_debug.h"
+#include <pathnames.h>
+#include <sudo_compat.h>
+#include <sudo_conf.h>
+#include <sudo_eventlog.h>
+#include <sudo_fatal.h>
+#include <sudo_gettext.h>
+#include <sudo_nss.h>
+#include <sudo_plugin.h>
+#include <sudo_queue.h>
+#include <sudo_util.h>
+#include <sudoers_debug.h>
 
-#include "defaults.h"
-#include "logging.h"
-#include "parse.h"
-#include "pivot.h"
+#include <defaults.h>
+#include <logging.h>
+#include <parse.h>
+#include <pivot.h>
 
 /*
  * Info passed in from the sudo front-end.
@@ -108,7 +108,6 @@ struct sudoers_plugin_settings {
     const char *ldap_conf;
     const char *ldap_secret;
     unsigned int flags;
-    int max_groups;
 };
 
 /*
@@ -132,7 +131,8 @@ struct sudoers_user_context {
     char *cmnd_list;
     char *ccname;
     struct gid_list *gid_list;
-    char * const * env_vars;
+    char * const * envp;
+    char * const * env_add;
     int   closefrom;
     int   lines;
     int   cols;
@@ -235,7 +235,7 @@ struct sudoers_context {
 #define FLAG_BAD_PASSWORD	0x200U
 
 /*
- * Return values for check_user() (rowhammer resistent).
+ * Return values for check_user() (rowhammer resistant).
  */
 #undef AUTH_SUCCESS
 #define AUTH_SUCCESS		0x52a2925	/* 0101001010100010100100100101 */
@@ -334,7 +334,7 @@ int check_user_runchroot(const char *runchroot);
 int check_user_runcwd(const char *runcwd);
 
 /* prompt.c */
-char *expand_prompt(const struct sudoers_context *ctx, const char *old_prompt, const char *auth_user);
+char *expand_prompt(const struct sudoers_context *ctx, const char *restrict old_prompt, const char *restrict auth_user);
 
 /* sudo_auth.c */
 bool sudo_auth_needs_end_session(void);
@@ -414,6 +414,7 @@ extern const struct iolog_path_escape *sudoers_iolog_path_escapes;
 char **env_get(void);
 bool env_merge(const struct sudoers_context *ctx, char * const envp[]);
 bool env_swap_old(void);
+void env_free(void);
 bool env_init(char * const envp[]);
 bool init_envtables(void);
 bool insert_env_vars(char * const envp[]);
@@ -495,7 +496,7 @@ void canon_path_free(char *resolved);
 void canon_path_free_cache(void);
 
 /* strlcpy_unesc.c */
-size_t strlcpy_unescape(char *dst, const char *src, size_t size);
+size_t strlcpy_unescape(char *restrict dst, const char *restrict src, size_t size);
 
 /* strvec_join.c */
 char *strvec_join(char *const argv[], char sep, size_t (*cpy)(char *, const char *, size_t));

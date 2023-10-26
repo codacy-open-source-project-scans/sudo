@@ -50,13 +50,13 @@
 #include <signal.h>
 #include <syslog.h>
 #ifndef HAVE_GETADDRINFO
-# include "compat/getaddrinfo.h"
+# include <compat/getaddrinfo.h>
 #endif
 
-#include "sudoers.h"
+#include <sudoers.h>
 #ifdef SUDOERS_LOG_CLIENT
-# include "log_client.h"
-# include "strlist.h"
+# include <log_client.h>
+# include <strlist.h>
 #endif
 
 struct parse_error {
@@ -267,7 +267,7 @@ log_reject(const struct sudoers_context *ctx, const char *message,
 	    SET(evl_flags, EVLOG_MAIL_ONLY);
     }
     sudoers_to_eventlog(ctx, &evlog, ctx->runas.cmnd, ctx->runas.argv,
-	env_get(), uuid_str);
+	NULL, uuid_str);
     ret = eventlog_reject(&evlog, evl_flags, message, NULL, NULL);
     if (!log_server_reject(ctx, &evlog, message))
 	ret = false;
@@ -399,7 +399,7 @@ log_failure(const struct sudoers_context *ctx, unsigned int status,
 static char *
 fmt_authfail_message(unsigned int tries)
 {
-    char numbuf[(((sizeof(int) * 8) + 2) / 3) + 2];
+    char numbuf[STRLEN_MAX_UNSIGNED(unsigned int) + 1];
     char *dst, *dst_end, *ret = NULL;
     const char *src;
     size_t len;
@@ -636,7 +636,7 @@ log_exit_status(const struct sudoers_context *ctx, int status)
 	sudoers_setlocale(SUDOERS_LOCALE_SUDOERS, &oldlocale);
 
 	sudoers_to_eventlog(ctx, &evlog, ctx->runas.cmnd_saved,
-	    ctx->runas.argv_saved, env_get(), ctx->uuid_str);
+	    ctx->runas.argv_saved, NULL, ctx->uuid_str);
 	if (def_mail_always) {
 	    SET(evl_flags, EVLOG_MAIL);
 	    if (!def_log_exit_status)
@@ -740,7 +740,7 @@ vlog_warning(const struct sudoers_context *ctx, unsigned int flags,
 		SET(evl_flags, EVLOG_MAIL_ONLY);
 	}
 	sudoers_to_eventlog(ctx, &evlog, ctx->runas.cmnd, ctx->runas.argv,
-	    env_get(), ctx->uuid_str);
+	    NULL, ctx->uuid_str);
 	if (!eventlog_alert(&evlog, evl_flags, &now, message, errstr))
 	    ret = false;
 	if (!log_server_alert(ctx, &evlog, &now, message, errstr))
@@ -860,7 +860,7 @@ mail_parse_errors(const struct sudoers_context *ctx)
 	goto done;
     }
     sudoers_to_eventlog(ctx, &evlog, ctx->runas.cmnd, ctx->runas.argv,
-	env_get(), ctx->uuid_str);
+	NULL, ctx->uuid_str);
 
     /* Convert parse_error_list to a string vector. */
     n = 0;
@@ -969,7 +969,7 @@ should_mail(const struct sudoers_context *ctx, unsigned int status)
  */
 void
 sudoers_to_eventlog(const struct sudoers_context *ctx, struct eventlog *evlog,
-    const char *cmnd, char * const argv[], char * const envp[],
+    const char *cmnd, char * const runargv[], char * const runenv[],
     const char *uuid_str)
 {
     struct group *grp;
@@ -982,7 +982,7 @@ sudoers_to_eventlog(const struct sudoers_context *ctx, struct eventlog *evlog,
     memset(evlog, 0, sizeof(*evlog));
     evlog->iolog_file = ctx->iolog_file;
     evlog->iolog_path = ctx->iolog_path;
-    evlog->command = cmnd ? (char *)cmnd : (argv ? argv[0] : NULL);
+    evlog->command = cmnd ? (char *)cmnd : (runargv ? runargv[0] : NULL);
     evlog->cwd = ctx->user.cwd;
     if (def_runchroot != NULL && strcmp(def_runchroot, "*") != 0) {
 	evlog->runchroot = def_runchroot;
@@ -1001,9 +1001,10 @@ sudoers_to_eventlog(const struct sudoers_context *ctx, struct eventlog *evlog,
     if (grp != NULL)
 	evlog->submitgroup = grp->gr_name;
     evlog->ttyname = ctx->user.ttypath;
-    evlog->argv = (char **)argv;
-    evlog->env_add = (char **)ctx->user.env_vars;
-    evlog->envp = (char **)envp;
+    evlog->runargv = (char **)runargv;
+    evlog->env_add = (char **)ctx->user.env_add;
+    evlog->runenv = (char **)runenv;
+    evlog->submitenv = (char **)ctx->user.envp;
     evlog->submit_time = ctx->submit_time;
     evlog->lines = ctx->user.lines;
     evlog->columns = ctx->user.cols;

@@ -35,10 +35,10 @@
 #include <grp.h>
 #include <pwd.h>
 
-#include "sudoers.h"
-#include "sudoers_version.h"
-#include "timestamp.h"
-#include "interfaces.h"
+#include <sudoers.h>
+#include <sudoers_version.h>
+#include <timestamp.h>
+#include <interfaces.h>
 #include "auth/sudo_auth.h"
 
 static char **command_info;
@@ -810,7 +810,7 @@ sudoers_policy_store_result(struct sudoers_context *ctx, bool accepted,
 
 	/* We reserve an extra spot in the list for the effective gid. */
 	glsize = sizeof("runas_groups=") - 1 +
-	    (((size_t)gidlist->ngids + 1) * (MAX_UID_T_LEN + 1));
+	    (((size_t)gidlist->ngids + 1) * (STRLEN_MAX_UNSIGNED(gid_t) + 1));
 	gid_list = malloc(glsize);
 	if (gid_list == NULL) {
 	    sudo_gidlist_delref(gidlist);
@@ -1158,9 +1158,6 @@ sudoers_policy_close(int exit_status, int error_code)
 
     /* Deregister the callback for sudo_fatal()/sudo_fatalx(). */
     sudo_fatal_callback_deregister(sudoers_cleanup);
-
-    /* Free stashed copy of the environment. */
-    (void)env_init(NULL);
 
     /* Free sudoers sources, ctx->user.and passwd/group caches. */
     sudoers_cleanup();

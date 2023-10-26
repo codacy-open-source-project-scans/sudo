@@ -50,7 +50,7 @@
 #include <pwd.h>
 #include <grp.h>
 #ifndef HAVE_GETADDRINFO
-# include "compat/getaddrinfo.h"
+# include <compat/getaddrinfo.h>
 #endif
 
 #if defined(HAVE_OPENSSL)
@@ -64,13 +64,13 @@
 
 #define NEED_INET_NTOP		/* to expose sudo_inet_ntop in sudo_compat.h */
 
-#include "sudoers.h"
-#include "sudo_event.h"
-#include "sudo_eventlog.h"
-#include "sudo_iolog.h"
-#include "hostcheck.h"
-#include "log_client.h"
-#include "strlist.h"
+#include <sudoers.h>
+#include <sudo_event.h>
+#include <sudo_eventlog.h>
+#include <sudo_iolog.h>
+#include <hostcheck.h>
+#include <log_client.h>
+#include <strlist.h>
 
 /* Shared between iolog.c and audit.c */
 struct client_closure *client_closure;
@@ -818,25 +818,35 @@ fmt_info_messages(struct client_closure *closure, struct eventlog *evlog,
 {
     InfoMessage__StringList *runargv = NULL;
     InfoMessage__StringList *runenv = NULL;
+    InfoMessage__StringList *submitenv = NULL;
     InfoMessage **info_msgs = NULL;
     size_t info_msgs_size, n = 0;
     debug_decl(fmt_info_messages, SUDOERS_DEBUG_UTIL);
 
     /* Convert NULL-terminated vectors to StringList. */
-    if (evlog->argv != NULL) {
+    if (evlog->submitenv != NULL) {
+	if ((submitenv = malloc(sizeof(*submitenv))) == NULL)
+	    goto bad;
+	info_message__string_list__init(submitenv);
+	submitenv->strings = evlog->submitenv;
+	while (submitenv->strings[submitenv->n_strings] != NULL)
+	    submitenv->n_strings++;
+    }
+
+    if (evlog->runargv != NULL) {
 	if ((runargv = malloc(sizeof(*runargv))) == NULL)
 	    goto bad;
 	info_message__string_list__init(runargv);
-	runargv->strings = evlog->argv;
+	runargv->strings = evlog->runargv;
 	while (runargv->strings[runargv->n_strings] != NULL)
 	    runargv->n_strings++;
     }
 
-    if (evlog->envp != NULL) {
+    if (evlog->runenv != NULL) {
 	if ((runenv = malloc(sizeof(*runenv))) == NULL)
 	    goto bad;
 	info_message__string_list__init(runenv);
-	runenv->strings = evlog->envp;
+	runenv->strings = evlog->runenv;
 	while (runenv->strings[runenv->n_strings] != NULL)
 	    runenv->n_strings++;
     }
@@ -912,7 +922,10 @@ fmt_info_messages(struct client_closure *closure, struct eventlog *evlog,
     if (evlog->cwd != NULL) {
 	fill_str("submitcwd", evlog->cwd);
     }
-    /* TODO - submitenv */
+    if (submitenv != NULL) {
+        fill_strlist("submitenv", submitenv);
+        submitenv = NULL;
+    }
     /* TODO - submitgid */
     /* TODO - submitgids */
     /* TODO - submitgroup */
@@ -935,6 +948,7 @@ bad:
     free_info_messages(info_msgs, n);
     free(runargv);
     free(runenv);
+    free(submitenv);
 
     *n_info_msgs = 0;
     debug_return_ptr(NULL);
@@ -1513,8 +1527,8 @@ handle_commit_point(TimeSpec *commit_point, struct client_closure *closure)
 	debug_return_bool(false);
     }
 
-    closure->committed.tv_sec = commit_point->tv_sec;
-    closure->committed.tv_nsec = commit_point->tv_nsec;
+    closure->committed.tv_sec = (time_t)commit_point->tv_sec;
+    closure->committed.tv_nsec = (long)commit_point->tv_nsec;
     sudo_debug_printf(SUDO_DEBUG_INFO,
 	"%s: received [%lld, %d], elapsed [%lld, %ld], committed [%lld, %ld]",
 	__func__, (long long)commit_point->tv_sec, commit_point->tv_nsec,

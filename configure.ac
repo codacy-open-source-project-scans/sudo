@@ -18,7 +18,7 @@ dnl ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 dnl OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 dnl
 AC_PREREQ([2.69])
-AC_INIT([sudo], [1.9.14], [https://bugzilla.sudo.ws/], [sudo])
+AC_INIT([sudo], [1.9.15], [https://bugzilla.sudo.ws/], [sudo])
 AC_CONFIG_HEADERS([config.h pathnames.h])
 AC_CONFIG_SRCDIR([src/sudo.c])
 AC_CONFIG_AUX_DIR([scripts])
@@ -2501,13 +2501,15 @@ AC_CHECK_TYPES([struct in6_addr], [], [], [#include <sys/types.h>
 AC_CHECK_TYPES(socklen_t, [], [], [
 AC_INCLUDES_DEFAULT
 #include <sys/socket.h>])
-SUDO_UID_T_LEN
 SUDO_SOCK_SA_LEN
 SUDO_SOCK_SIN_LEN
 AC_CHECK_SIZEOF([long])
 AC_CHECK_SIZEOF([long long])
 AC_CHECK_SIZEOF([id_t])
 AC_CHECK_SIZEOF([time_t])
+AC_CHECK_SIZEOF([uid_t])
+# sudo current assumes uid_t can be cast to unsigned int without problems
+AS_IF([test $ac_cv_sizeof_uid_t -gt 4], [AC_MSG_ERROR([sudo does not support systems where uid_t is larger than 32-bit])])
 AS_IF([test X"$ac_cv_header_utmps_h" = X"yes"], [
     SUDO_CHECK_UTMP_MEMBERS([utmps])
 ], [test X"$ac_cv_header_utmpx_h" = X"yes"], [

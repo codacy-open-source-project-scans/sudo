@@ -30,9 +30,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "sudo.h"
-#include "sudo_exec.h"
-#include "sudo_util.h"
+#include <sudo.h>
+#include <sudo_exec.h>
+#include <sudo_util.h>
 
 #ifdef RTLD_PRELOAD_VAR
 typedef void * (*sudo_alloc_fn_t)(size_t, size_t);
@@ -76,7 +76,7 @@ fmtstr(sudo_alloc_fn_t alloc_fn, sudo_free_fn_t free_fn, const char * restrict o
 		fmt += 2;
 		continue;
 	    case 'd': {
-		char numbuf[(((sizeof(int) * 8) + 2) / 3) + 2];
+		char numbuf[STRLEN_MAX_SIGNED(int) + 1];
 		len = (size_t)snprintf(numbuf, sizeof(numbuf), "%d",
 		    va_arg(ap, int));
 		if (len >= sizeof(numbuf)) {

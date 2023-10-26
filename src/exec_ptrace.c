@@ -48,15 +48,15 @@
 #elif defined(HAVE_MACHINE_ENDIAN_H)
 # include <machine/endian.h>
 #else
-# include "compat/endian.h"
+# include <compat/endian.h>
 #endif
 
-#include "sudo.h"
-#include "sudo_exec.h"
+#include <sudo.h>
+#include <sudo_exec.h>
 
 #ifdef HAVE_PTRACE_INTERCEPT
-# include "exec_intercept.h"
-# include "exec_ptrace.h"
+# include <exec_intercept.h>
+# include <exec_ptrace.h>
 
 /* We need to take care when ptracing 32-bit binaries on 64-bit kernels. */
 # ifdef __LP64__
@@ -1704,7 +1704,7 @@ static bool
 ptrace_intercept_execve(pid_t pid, struct intercept_closure *closure)
 {
     char *pathname, **argv, **envp, *buf;
-    const int flags = closure->details->flags;
+    const unsigned int flags = closure->details->flags;
     int argc, envc, syscallno;
     struct sudo_ptrace_regs regs;
     bool path_mismatch = false;

@@ -58,12 +58,12 @@
 #endif
 #include <ctype.h>
 #ifndef HAVE_GETADDRINFO
-# include "compat/getaddrinfo.h"
+# include <compat/getaddrinfo.h>
 #endif
 
-#include "sudoers.h"
-#include "timestamp.h"
-#include "sudo_iolog.h"
+#include <sudoers.h>
+#include <timestamp.h>
+#include <sudo_iolog.h>
 
 /*
  * Prototypes
@@ -582,7 +582,7 @@ sudoers_check_common(struct sudoers_context *ctx, int pwflag)
 		U_("sorry, you are not allowed to preserve the environment"));
 	    goto bad;
 	} else {
-	    if (!validate_env_vars(ctx, ctx->user.env_vars))
+	    if (!validate_env_vars(ctx, ctx->user.env_add))
 		goto bad;
 	}
     }
@@ -641,7 +641,7 @@ sudoers_check_cmnd(int argc, char * const argv[], char *env_add[],
 
     /* Environment variables specified on the command line. */
     if (env_add != NULL && env_add[0] != NULL)
-	sudoers_ctx.user.env_vars = env_add;
+	sudoers_ctx.user.env_add = env_add;
 
     /*
      * Make a local copy of argc/argv, with special handling for the
@@ -725,7 +725,7 @@ sudoers_check_cmnd(int argc, char * const argv[], char *env_add[],
 	    sudoers_ctx.runas.argc++;
 	}
 
-#if defined(_AIX) || (defined(__linux__) && !defined(HAVE_PAM))
+#ifdef _PATH_ENVIRONMENT
 	/* Insert system-wide environment variables. */
 	if (!read_env_file(&sudoers_ctx, _PATH_ENVIRONMENT, true, false))
 	    sudo_warn("%s", _PATH_ENVIRONMENT);
@@ -754,7 +754,7 @@ sudoers_check_cmnd(int argc, char * const argv[], char *env_add[],
     }
 
     /* Insert user-specified environment variables. */
-    if (!insert_env_vars(sudoers_ctx.user.env_vars)) {
+    if (!insert_env_vars(sudoers_ctx.user.env_add)) {
 	sudo_warnx("%s",
 	    U_("error setting user-specified environment variables"));
 	goto error;
@@ -832,9 +832,6 @@ done:
     reset_parser();
 
     if (ret == -1) {
-	/* Free stashed copy of the environment. */
-	(void)env_init(NULL);
-
 	/* Free locally-allocated strings. */
 	free(iolog_path);
     } else {
@@ -843,6 +840,9 @@ done:
 	    sudoers_ctx.runas.argv, env_get(), cmnd_umask, iolog_path, closure))
 	    ret = -1;
     }
+
+    /* Zero out stashed copy of environment, it is owned by the front-end. */
+    (void)env_init(NULL);
 
     if (!rewind_perms())
 	ret = -1;
@@ -989,7 +989,8 @@ init_vars(struct sudoers_context *ctx, char * const envp[])
 #define MATCHES(s, v)	\
     (strncmp((s), (v), sizeof(v) - 1) == 0 && (s)[sizeof(v) - 1] != '\0')
 
-    for (ep = envp; *ep; ep++) {
+    ctx->user.envp = envp;
+    for (ep = ctx->user.envp; *ep; ep++) {
 	switch (**ep) {
 	    case 'K':
 		if (MATCHES(*ep, "KRB5CCNAME="))
@@ -1513,7 +1514,7 @@ sudoers_cleanup(void)
     canon_path_free_cache();
 
     /* We must free the cached environment before running g/c. */
-    env_init(NULL);
+    env_free();
 
     /* Run garbage collector. */
     sudoers_gc_run();

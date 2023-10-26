@@ -29,18 +29,18 @@
 #ifdef HAVE_STDBOOL_H
 # include <stdbool.h>
 #else
-# include "compat/stdbool.h"
+# include <compat/stdbool.h>
 #endif
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
 
-#include "sudo_compat.h"
-#include "sudo_debug.h"
-#include "sudo_fatal.h"
-#include "sudo_gettext.h"
-#include "sudo_iolog.h"
-#include "sudo_util.h"
+#include <sudo_compat.h>
+#include <sudo_debug.h>
+#include <sudo_fatal.h>
+#include <sudo_gettext.h>
+#include <sudo_iolog.h>
+#include <sudo_util.h>
 
 /*
  * Create directory and any parent directories as needed.
@@ -88,6 +88,7 @@ iolog_mkdirs(const char *path)
 	} else {
 	    sudo_warnx(U_("%s exists but is not a directory (0%o)"),
 		path, (unsigned int) sb.st_mode);
+	    errno = ENOTDIR;
 	    ok = false;
 	}
 	goto done;

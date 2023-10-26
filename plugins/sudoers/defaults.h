@@ -26,7 +26,7 @@
 
 #include <time.h>
 #include <def_data.h>
-#include "sudo_queue.h"
+#include <sudo_queue.h>
 
 struct list_member {
     SLIST_ENTRY(list_member) entries;
@@ -111,6 +111,8 @@ struct early_default {
 #define T_TIMEOUT	0x011
 #undef T_RLIMIT
 #define T_RLIMIT	0x012
+#undef T_PLUGIN
+#define T_PLUGIN	0x013
 #undef T_MASK
 #define T_MASK		0x0FF
 #undef T_BOOL

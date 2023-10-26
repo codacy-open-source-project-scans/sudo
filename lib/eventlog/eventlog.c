@@ -47,16 +47,16 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "pathnames.h"
-#include "sudo_compat.h"
-#include "sudo_debug.h"
-#include "sudo_eventlog.h"
-#include "sudo_lbuf.h"
-#include "sudo_fatal.h"
-#include "sudo_gettext.h"
-#include "sudo_json.h"
-#include "sudo_queue.h"
-#include "sudo_util.h"
+#include <pathnames.h>
+#include <sudo_compat.h>
+#include <sudo_debug.h>
+#include <sudo_eventlog.h>
+#include <sudo_lbuf.h>
+#include <sudo_fatal.h>
+#include <sudo_gettext.h>
+#include <sudo_json.h>
+#include <sudo_queue.h>
+#include <sudo_util.h>
 
 #define IS_SESSID(s) ( \
     isalnum((unsigned char)(s)[0]) && isalnum((unsigned char)(s)[1]) && \
@@ -84,7 +84,7 @@ new_logline(int event_type, int flags, struct eventlog_args *args,
     const struct eventlog_config *evl_conf = eventlog_getconf();
     const char *iolog_file;
     const char *tty, *tsid = NULL;
-    char exit_str[(((sizeof(int) * 8) + 2) / 3) + 2];
+    char exit_str[STRLEN_MAX_SIGNED(int) + 1];
     char sessid[7], offsetstr[64] = "";
     size_t i;
     debug_decl(new_logline, SUDO_DEBUG_UTIL);
@@ -191,24 +191,24 @@ new_logline(int event_type, int flags, struct eventlog_args *args,
 	}
 	sudo_lbuf_append(lbuf, " ; ");
     }
-    if (evlog->command != NULL && evlog->argv != NULL) {
+    if (evlog->command != NULL && evlog->runargv != NULL) {
 	/* Command plus argv. */
 	sudo_lbuf_append_esc(lbuf, LBUF_ESC_CNTRL|LBUF_ESC_BLANK,
 	    "COMMAND=%s", evlog->command);
-	if (evlog->argv[0] != NULL) {
-	    for (i = 1; evlog->argv[i] != NULL; i++) {
+	if (evlog->runargv[0] != NULL) {
+	    for (i = 1; evlog->runargv[i] != NULL; i++) {
 		sudo_lbuf_append(lbuf, " ");
-		if (strchr(evlog->argv[i], ' ') != NULL) {
+		if (strchr(evlog->runargv[i], ' ') != NULL) {
 		    /* Wrap args containing spaces in single quotes. */
 		    sudo_lbuf_append(lbuf, "'");
 		    sudo_lbuf_append_esc(lbuf, LBUF_ESC_CNTRL|LBUF_ESC_QUOTE,
-			"%s", evlog->argv[i]);
+			"%s", evlog->runargv[i]);
 		    sudo_lbuf_append(lbuf, "'");
 		} else {
 		    /* Escape quotes here too for consistency. */
 		    sudo_lbuf_append_esc(lbuf,
 			LBUF_ESC_CNTRL|LBUF_ESC_BLANK|LBUF_ESC_QUOTE,
-			"%s", evlog->argv[i]);
+			"%s", evlog->runargv[i]);
 		}
 	    }
 	}
@@ -733,10 +733,10 @@ eventlog_store_json(struct json_container *jsonc, const struct eventlog *evlog)
     if (!sudo_json_add_value(jsonc, "lines", &json_value))
         goto oom;
 
-    if (evlog->argv != NULL) {
+    if (evlog->runargv != NULL) {
 	if (!sudo_json_open_array(jsonc, "runargv"))
 	    goto oom;
-	for (i = 0; (cp = evlog->argv[i]) != NULL; i++) {
+	for (i = 0; (cp = evlog->runargv[i]) != NULL; i++) {
 	    json_value.type = JSON_STRING;
 	    json_value.u.string = cp;
 	    if (!sudo_json_add_value(jsonc, NULL, &json_value))
@@ -746,10 +746,23 @@ eventlog_store_json(struct json_container *jsonc, const struct eventlog *evlog)
 	    goto oom;
     }
 
-    if (evlog->envp != NULL) {
+    if (evlog->runenv != NULL) {
 	if (!sudo_json_open_array(jsonc, "runenv"))
 	    goto oom;
-	for (i = 0; (cp = evlog->envp[i]) != NULL; i++) {
+	for (i = 0; (cp = evlog->runenv[i]) != NULL; i++) {
+	    json_value.type = JSON_STRING;
+	    json_value.u.string = cp;
+	    if (!sudo_json_add_value(jsonc, NULL, &json_value))
+		goto oom;
+	}
+	if (!sudo_json_close_array(jsonc))
+	    goto oom;
+    }
+
+    if (evlog->submitenv != NULL) {
+	if (!sudo_json_open_array(jsonc, "submitenv"))
+	    goto oom;
+	for (i = 0; (cp = evlog->submitenv[i]) != NULL; i++) {
 	    json_value.type = JSON_STRING;
 	    json_value.u.string = cp;
 	    if (!sudo_json_add_value(jsonc, NULL, &json_value))

@@ -24,8 +24,8 @@
 
 #define SUDO_ERROR_WRAP 0
 
-#include "sudo_compat.h"
-#include "sudo_util.h"
+#include <sudo_compat.h>
+#include <sudo_util.h>
 
 sudo_dso_public int main(int argc, char *argv[]);
 
@@ -46,7 +46,7 @@ main(int argc, char *argv[])
 
     /* Build up test data. */
     ntests = 256 + 256 + 3;
-    test_data = calloc(sizeof(*test_data), (size_t)ntests);
+    test_data = calloc((size_t)ntests, sizeof(*test_data));
     for (i = 0; i < 256; i++) {
 	/* lower case */
 	test_data[i].value = i;

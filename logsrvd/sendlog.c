@@ -38,7 +38,7 @@
 #ifdef HAVE_STDBOOL_H
 # include <stdbool.h>
 #else
-# include "compat/stdbool.h"
+# include <compat/stdbool.h>
 #endif /* HAVE_STDBOOL_H */
 #if defined(HAVE_STDINT_H)
 # include <stdint.h>
@@ -51,26 +51,26 @@
 #include <time.h>
 #include <unistd.h>
 #ifndef HAVE_GETADDRINFO
-# include "compat/getaddrinfo.h"
+# include <compat/getaddrinfo.h>
 #endif
 #ifdef HAVE_GETOPT_LONG
 # include <getopt.h>
 # else
-# include "compat/getopt.h"
+# include <compat/getopt.h>
 #endif /* HAVE_GETOPT_LONG */
 
-#include "sudo_compat.h"
-#include "sudo_conf.h"
-#include "sudo_debug.h"
-#include "sudo_event.h"
-#include "sudo_eventlog.h"
-#include "sudo_fatal.h"
-#include "sudo_gettext.h"
-#include "sudo_iolog.h"
-#include "sudo_util.h"
+#include <sudo_compat.h>
+#include <sudo_conf.h>
+#include <sudo_debug.h>
+#include <sudo_event.h>
+#include <sudo_eventlog.h>
+#include <sudo_fatal.h>
+#include <sudo_gettext.h>
+#include <sudo_iolog.h>
+#include <sudo_util.h>
 
 #include "sendlog.h"
-#include "hostcheck.h"
+#include <hostcheck.h>
 
 #if defined(HAVE_OPENSSL)
 # define TLS_HANDSHAKE_TIMEO_SEC 10
@@ -507,9 +507,9 @@ fmt_runargv(const struct eventlog *evlog)
     debug_decl(fmt_runargv, SUDO_DEBUG_UTIL);
 
     /* We may have runargv from the log.json file. */
-    if (evlog->argv != NULL && evlog->argv[0] != NULL) {
-	/* Convert evlog->argv into a StringList. */
-	runargv = vec_to_stringlist(evlog->argv);
+    if (evlog->runargv != NULL && evlog->runargv[0] != NULL) {
+	/* Convert evlog->runargv into a StringList. */
+	runargv = vec_to_stringlist(evlog->runargv);
 	if (runargv != NULL) {
 	    /* Make sure command doesn't include arguments. */
 	    char *cp = strchr(evlog->command, ' ');
@@ -533,10 +533,25 @@ fmt_runenv(const struct eventlog *evlog)
     debug_decl(fmt_runenv, SUDO_DEBUG_UTIL);
 
     /* Only present in log.json. */
-    if (evlog->envp == NULL || evlog->envp[0] == NULL)
+    if (evlog->runenv == NULL || evlog->runenv[0] == NULL)
 	debug_return_ptr(NULL);
 
-    debug_return_ptr(vec_to_stringlist(evlog->envp));
+    debug_return_ptr(vec_to_stringlist(evlog->runenv));
+}
+
+/*
+ * Build submitenv StringList from env in evlog, if present.
+ */
+static InfoMessage__StringList *
+fmt_submitenv(const struct eventlog *evlog)
+{
+    debug_decl(fmt_submitenv, SUDO_DEBUG_UTIL);
+
+    /* Only present in log.json. */
+    if (evlog->submitenv == NULL || evlog->submitenv[0] == NULL)
+	debug_return_ptr(NULL);
+
+    debug_return_ptr(vec_to_stringlist(evlog->submitenv));
 }
 
 static InfoMessage **
@@ -546,6 +561,7 @@ fmt_info_messages(const struct eventlog *evlog, char *hostname,
     InfoMessage **info_msgs = NULL;
     InfoMessage__StringList *runargv = NULL;
     InfoMessage__StringList *runenv = NULL;
+    InfoMessage__StringList *submitenv = NULL;
     size_t info_msgs_size, n = 0;
     debug_decl(fmt_info_messages, SUDO_DEBUG_UTIL);
 
@@ -553,8 +569,9 @@ fmt_info_messages(const struct eventlog *evlog, char *hostname,
     if (runargv == NULL)
 	goto oom;
 
-    /* runenv is only present in log.json */
+    /* runenv and submitenv are only present in log.json */
     runenv = fmt_runenv(evlog);
+    submitenv = fmt_submitenv(evlog);
 
     /* The sudo I/O log info file has limited info. */
     info_msgs_size = 14;
@@ -596,6 +613,10 @@ fmt_info_messages(const struct eventlog *evlog, char *hostname,
     fill_num("lines", evlog->lines);
     fill_strlist("runargv", runargv);
     runargv = NULL;
+    if (submitenv != NULL) {
+	fill_strlist("submitenv", submitenv);
+	submitenv = NULL;
+    }
     if (runenv != NULL) {
 	fill_strlist("runenv", runenv);
 	runenv = NULL;
@@ -636,6 +657,10 @@ oom:
     if (runenv != NULL) {
         free(runenv->strings);
         free(runenv);
+    }
+    if (submitenv != NULL) {
+        free(submitenv->strings);
+        free(submitenv);
     }
     *n_info_msgs = 0;
     debug_return_ptr(NULL);
@@ -1118,7 +1143,7 @@ handle_server_hello(ServerHello *msg, struct client_closure *closure)
         if (msg->redirect != NULL && msg->redirect[0] != '\0')
             printf("Redirect: %s\n", msg->redirect);
         for (n = 0; n < msg->n_servers; n++) {
-            printf("Server %zu: %s\n", n + 1, msg->servers[n]);
+            printf("Server %u: %s\n", (unsigned int)n + 1, msg->servers[n]);
         }
     }
 
@@ -1142,8 +1167,8 @@ handle_commit_point(TimeSpec *commit_point, struct client_closure *closure)
 
     sudo_debug_printf(SUDO_DEBUG_INFO, "%s: commit point: [%lld, %d]",
 	__func__, (long long)commit_point->tv_sec, commit_point->tv_nsec);
-    closure->committed.tv_sec = commit_point->tv_sec;
-    closure->committed.tv_nsec = commit_point->tv_nsec;
+    closure->committed.tv_sec = (time_t)commit_point->tv_sec;
+    closure->committed.tv_nsec = (long)commit_point->tv_nsec;
 
     debug_return_bool(true);
 }
@@ -1518,14 +1543,14 @@ parse_timespec(struct timespec *ts, char *strval)
 	*nsecstr++ = '\0';
 
     ts->tv_nsec = 0;
-    ts->tv_sec = sudo_strtonum(strval, 0, TIME_T_MAX, &errstr);
+    ts->tv_sec = (time_t)sudo_strtonum(strval, 0, TIME_T_MAX, &errstr);
     if (errstr != NULL) {
 	sudo_warnx(U_("%s: %s"), strval, U_(errstr));
 	debug_return_bool(false);
     }
 
     if (nsecstr != NULL) {
-	ts->tv_nsec = sudo_strtonum(nsecstr, 0, LONG_MAX, &errstr);
+	ts->tv_nsec = (long)sudo_strtonum(nsecstr, 0, LONG_MAX, &errstr);
 	if (errstr != NULL) {
 	    sudo_warnx(U_("%s: %s"), nsecstr, U_(errstr));
 	    debug_return_bool(false);
@@ -1861,7 +1886,7 @@ main(int argc, char *argv[])
     }  
 
     if (testrun)
-        printf("sending logs...\n");
+        puts("sending logs...");
 
     struct timespec t_start, t_end, t_result;
     sudo_gettime_real(&t_start);

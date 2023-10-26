@@ -60,14 +60,14 @@
 #ifdef HAVE_GETOPT_LONG
 # include <getopt.h>
 # else
-# include "compat/getopt.h"
+# include <compat/getopt.h>
 #endif /* HAVE_GETOPT_LONG */
 
-#include "sudoers.h"
-#include "interfaces.h"
-#include "redblack.h"
-#include "sudoers_version.h"
-#include "sudo_conf.h"
+#include <sudoers.h>
+#include <interfaces.h>
+#include <redblack.h>
+#include <sudoers_version.h>
+#include <sudo_conf.h>
 #include <gram.h>
 
 struct sudoersfile {
@@ -421,21 +421,22 @@ get_editor(int *editor_argc, char ***editor_argv)
  * No other wild cards are supported.
  */
 static const char *lineno_editors[] = {
-    "ex",
-    "nex",
-    "vi",
-    "nvi",
-    "vim",
-    "nvim",
-    "elvis",
     "*macs",
-    "mg",
-    "vile",
-    "jove",
-    "pico",
-    "nano",
     "ee",
+    "elvis",
+    "ex",
     "joe",
+    "jove",
+    "mg",
+    "nano",
+    "nex",
+    "nvi",
+    "nvim",
+    "o",
+    "pico",
+    "vi",
+    "vile",
+    "vim",
     "zile",
     NULL
 };

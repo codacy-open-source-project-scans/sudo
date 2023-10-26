@@ -21,7 +21,7 @@
 #define SUDOERS_PARSE_H
 
 #include <sys/stat.h>
-#include "sudo_queue.h"
+#include <sudo_queue.h>
 
 /* Characters that must be quoted in sudoers. */
 #define SUDOERS_QUOTED		":,=#\""
@@ -36,11 +36,11 @@
 # define SUDOERS_NAME_MATCH
 #endif
 
-/* Allowed by policy (rowhammer resistent). */
+/* Allowed by policy (rowhammer resistant). */
 #undef ALLOW
 #define ALLOW	 0x52a2925	/* 0101001010100010100100100101 */
 
-/* Denied by policy (rowhammer resistent). */
+/* Denied by policy (rowhammer resistant). */
 #undef DENY
 #define DENY	 0xad5d6da	/* 1010110101011101011011011010 */
 

@@ -36,7 +36,7 @@
 #ifdef HAVE_STDBOOL_H
 # include <stdbool.h>
 #else
-# include "compat/stdbool.h"
+# include <compat/stdbool.h>
 #endif /* HAVE_STDBOOL_H */
 #if defined(HAVE_STDINT_H)
 # include <stdint.h>
@@ -49,17 +49,17 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "sudo_compat.h"
-#include "sudo_conf.h"
-#include "sudo_debug.h"
-#include "sudo_event.h"
-#include "sudo_eventlog.h"
-#include "sudo_fatal.h"
-#include "sudo_gettext.h"
-#include "sudo_iolog.h"
-#include "sudo_util.h"
+#include <sudo_compat.h>
+#include <sudo_conf.h>
+#include <sudo_debug.h>
+#include <sudo_event.h>
+#include <sudo_eventlog.h>
+#include <sudo_fatal.h>
+#include <sudo_gettext.h>
+#include <sudo_iolog.h>
+#include <sudo_util.h>
 
-#include "logsrvd.h"
+#include <logsrvd.h>
 
 /*
  * Helper function to set closure->journal and closure->journal_path.
@@ -443,8 +443,8 @@ journal_restart(RestartMessage *msg, uint8_t *buf, size_t buflen,
     }
 
     /* Seek forward to resume point. */
-    target.tv_sec = msg->resume_point->tv_sec;
-    target.tv_nsec = msg->resume_point->tv_nsec;
+    target.tv_sec = (time_t)msg->resume_point->tv_sec;
+    target.tv_nsec = (long)msg->resume_point->tv_nsec;
     if (!journal_seek(&target, closure)) {
 	sudo_warn(U_("unable to seek to [%lld, %ld] in journal file %s"),
 	    (long long)target.tv_sec, target.tv_nsec, journal_path);

@@ -39,12 +39,12 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#include "sudoers.h"
-#include "sudo_eventlog.h"
-#include "sudo_iolog.h"
-#include "strlist.h"
+#include <sudoers.h>
+#include <sudo_eventlog.h>
+#include <sudo_iolog.h>
+#include <strlist.h>
 #ifdef SUDOERS_LOG_CLIENT
-# include "log_client.h"
+# include <log_client.h>
 #endif
 
 static struct iolog_file iolog_files[] = {
@@ -197,10 +197,12 @@ free_iolog_details(void)
 
     if (iolog_details.evlog != NULL) {
 	/* We only make a shallow copy of argv and envp. */
-	free(iolog_details.evlog->argv);
-	iolog_details.evlog->argv = NULL;
-	free(iolog_details.evlog->envp);
-	iolog_details.evlog->envp = NULL;
+	free(iolog_details.evlog->runargv);
+	iolog_details.evlog->runargv = NULL;
+	free(iolog_details.evlog->runenv);
+	iolog_details.evlog->runenv = NULL;
+	free(iolog_details.evlog->submitenv);
+	iolog_details.evlog->submitenv = NULL;
 	eventlog_free(iolog_details.evlog);
     }
     str_list_free(iolog_details.log_servers);
@@ -292,11 +294,12 @@ static int
 iolog_deserialize_info(struct log_details *details, char * const user_info[],
     char * const command_info[], char * const argv[], char * const user_env[])
 {
+    const struct sudoers_context *ctx = sudoers_get_context();
     struct eventlog *evlog;
     const char *runas_uid_str = "0", *runas_euid_str = NULL;
     const char *runas_gid_str = "0", *runas_egid_str = NULL;
     const char *errstr;
-    char idbuf[MAX_UID_T_LEN + 2];
+    char idbuf[STRLEN_MAX_UNSIGNED(uid_t) + 2];
     char * const *cur;
     struct passwd *pw;
     struct group *gr;
@@ -498,7 +501,7 @@ iolog_deserialize_info(struct log_details *details, char * const user_info[],
 		continue;
 	    }
 	    if (strncmp(*cur, "log_server_timeout=", sizeof("log_server_timeout=") - 1) == 0) {
-		details->server_timeout.tv_sec =
+		details->server_timeout.tv_sec = (time_t)
 		    sudo_strtonum(*cur + sizeof("log_server_timeout=") - 1, 1,
 		    TIME_T_MAX, NULL);
 		continue;
@@ -601,13 +604,18 @@ iolog_deserialize_info(struct log_details *details, char * const user_info[],
     }
 
     if (argv != NULL) {
-	evlog->argv = copy_vector_shallow(argv);
-	if (evlog->argv == NULL)
+	evlog->runargv = copy_vector_shallow(argv);
+	if (evlog->runargv == NULL)
 	    goto oom;
     }
     if (user_env != NULL) {
-	evlog->envp = copy_vector_shallow(user_env);
-	if (evlog->envp ==  NULL)
+	evlog->runenv = copy_vector_shallow(user_env);
+	if (evlog->runenv ==  NULL)
+	    goto oom;
+    }
+    if (ctx->user.envp != NULL) {
+	evlog->submitenv = copy_vector_shallow(ctx->user.envp);
+	if (evlog->submitenv ==  NULL)
 	    goto oom;
     }
 

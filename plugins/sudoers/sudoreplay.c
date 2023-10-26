@@ -46,31 +46,31 @@
 #ifdef HAVE_STDBOOL_H
 # include <stdbool.h>
 #else
-# include "compat/stdbool.h"
+# include <compat/stdbool.h>
 #endif /* HAVE_STDBOOL_H */
 #include <regex.h>
 #include <signal.h>
 #ifdef HAVE_GETOPT_LONG
 # include <getopt.h>
 # else
-# include "compat/getopt.h"
+# include <compat/getopt.h>
 #endif /* HAVE_GETOPT_LONG */
 
-#include "pathnames.h"
-#include "sudo_compat.h"
-#include "sudo_conf.h"
-#include "sudo_debug.h"
-#include "sudo_event.h"
-#include "sudo_eventlog.h"
-#include "sudo_lbuf.h"
-#include "sudo_fatal.h"
-#include "sudo_gettext.h"
-#include "sudo_iolog.h"
-#include "sudo_plugin.h"
-#include "sudo_queue.h"
-#include "sudo_util.h"
+#include <pathnames.h>
+#include <sudo_compat.h>
+#include <sudo_conf.h>
+#include <sudo_debug.h>
+#include <sudo_event.h>
+#include <sudo_eventlog.h>
+#include <sudo_lbuf.h>
+#include <sudo_fatal.h>
+#include <sudo_gettext.h>
+#include <sudo_iolog.h>
+#include <sudo_plugin.h>
+#include <sudo_queue.h>
+#include <sudo_util.h>
 
-#include "logging.h"
+#include <logging.h>
 
 struct replay_closure {
     const char *iolog_dir;
@@ -366,9 +366,9 @@ main(int argc, char *argv[])
     if ((evlog = iolog_parse_loginfo(iolog_dir_fd, iolog_dir)) == NULL)
 	goto done;
     printf(_("Replaying sudo session: %s"), evlog->command);
-    if (evlog->argv != NULL && evlog->argv[0] != NULL) {
-	for (i = 1; evlog->argv[i] != NULL; i++)
-	    printf(" %s", evlog->argv[i]);
+    if (evlog->runargv != NULL && evlog->runargv[0] != NULL) {
+	for (i = 1; evlog->runargv[i] != NULL; i++)
+	    printf(" %s", evlog->runargv[i]);
     }
 
     /* Setup terminal if appropriate. */
@@ -682,7 +682,7 @@ setup_terminal(struct eventlog *evlog, bool interactive, bool resize)
     }
 
     if (evlog->lines > terminal_lines || evlog->columns > terminal_cols) {
-	fputs(_("Warning: your terminal is too small to properly replay the log.\n"), stdout);
+	puts(_("Warning: your terminal is too small to properly replay the log."));
 	printf(_("Log geometry is %d x %d, your terminal's geometry is %d x %d."), evlog->lines, evlog->columns, terminal_lines, terminal_cols);
     }
     debug_return;
@@ -1321,15 +1321,15 @@ expand_command(struct eventlog *evlog, char **newbuf)
     int ac;
     debug_decl(expand_command, SUDO_DEBUG_UTIL);
 
-    if (evlog->argv == NULL || evlog->argv[0] == NULL || evlog->argv[1] == NULL) {
+    if (evlog->runargv == NULL || evlog->runargv[0] == NULL || evlog->runargv[1] == NULL) {
 	/* No arguments, we can use the command as-is. */
 	*newbuf = NULL;
 	debug_return_str(evlog->command);
     }
 
     /* Skip argv[0], we use evlog->command instead. */
-    for (ac = 1; evlog->argv[ac] != NULL; ac++)
-	bufsize += strlen(evlog->argv[ac]) + 1;
+    for (ac = 1; evlog->runargv[ac] != NULL; ac++)
+	bufsize += strlen(evlog->runargv[ac]) + 1;
 
     if ((buf = malloc(bufsize)) == NULL)
 	sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
@@ -1341,13 +1341,13 @@ expand_command(struct eventlog *evlog, char **newbuf)
     cp += len;
     bufsize -= len;
 
-    for (ac = 1; evlog->argv[ac] != NULL; ac++) {
+    for (ac = 1; evlog->runargv[ac] != NULL; ac++) {
 	if (bufsize < 2)
 	    sudo_fatalx(U_("internal error, %s overflow"), __func__);
 	*cp++ = ' ';
 	bufsize--;
 
-	len = strlcpy(cp, evlog->argv[ac], bufsize);
+	len = strlcpy(cp, evlog->runargv[ac], bufsize);
 	if (len >= bufsize)
 	    sudo_fatalx(U_("internal error, %s overflow"), __func__);
 	cp += len;

@@ -24,7 +24,7 @@
 #ifdef HAVE_STDBOOL_H
 # include <stdbool.h>
 #else
-# include "compat/stdbool.h"
+# include <compat/stdbool.h>
 #endif /* HAVE_STDBOOL_H */
 
 /* Supported event types. */
@@ -109,10 +109,11 @@ struct eventlog {
     char *submithost;
     char *submituser;
     char *submitgroup;
+    char **submitenv;
     char *ttyname;
-    char **argv;
+    char **runargv;
+    char **runenv;
     char **env_add;
-    char **envp;
     struct timespec submit_time;
     struct timespec iolog_offset;
     struct timespec run_time;

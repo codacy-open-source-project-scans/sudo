@@ -24,7 +24,7 @@
 #include "testhelpers.h"
 #include <unistd.h>
 
-#include "sudo_dso.h"
+#include <sudo_dso.h>
 
 #define DECL_PLUGIN(type, variable_name) \
     static struct type *variable_name = NULL; \
@@ -474,7 +474,7 @@ create_debug_config(const char *debug_spec)
     if (asprintf(&content, "Debug %s %s/debug.log %s\n",
                  "python_plugin.so", data.tmp_dir, debug_spec) < 0)
     {
-        printf("Failed to allocate string\n");
+        puts("Failed to allocate string");
         goto cleanup;
     }
 

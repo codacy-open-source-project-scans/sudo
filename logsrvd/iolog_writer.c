@@ -35,7 +35,7 @@
 #ifdef HAVE_STDBOOL_H
 # include <stdbool.h>
 #else
-# include "compat/stdbool.h"
+# include <compat/stdbool.h>
 #endif /* HAVE_STDBOOL_H */
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,16 +43,16 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "sudo_compat.h"
-#include "sudo_debug.h"
-#include "sudo_eventlog.h"
-#include "sudo_gettext.h"
-#include "sudo_iolog.h"
-#include "sudo_fatal.h"
-#include "sudo_queue.h"
-#include "sudo_util.h"
+#include <sudo_compat.h>
+#include <sudo_debug.h>
+#include <sudo_eventlog.h>
+#include <sudo_gettext.h>
+#include <sudo_iolog.h>
+#include <sudo_fatal.h>
+#include <sudo_queue.h>
+#include <sudo_util.h>
 
-#include "logsrvd.h"
+#include <logsrvd.h>
 
 static bool
 type_matches(InfoMessage *info, const char *source,
@@ -150,8 +150,8 @@ evlog_new(TimeSpec *submit_time, InfoMessage **info_msgs, size_t infolen,
 
     /* Submit time. */
     if (submit_time != NULL) {
-	evlog->submit_time.tv_sec = submit_time->tv_sec;
-	evlog->submit_time.tv_nsec = submit_time->tv_nsec;
+	evlog->submit_time.tv_sec = (time_t)submit_time->tv_sec;
+	evlog->submit_time.tv_nsec = (long)submit_time->tv_nsec;
     }
 
     /* Default values */
@@ -205,8 +205,8 @@ evlog_new(TimeSpec *submit_time, InfoMessage **info_msgs, size_t infolen,
 	case 'r':
 	    if (strcmp(key, "runargv") == 0) {
 		if (type_matches(info, source, INFO_MESSAGE__VALUE_STRLISTVAL)) {
-		    evlog->argv = strlist_copy(info->u.strlistval);
-		    if (evlog->argv == NULL)
+		    evlog->runargv = strlist_copy(info->u.strlistval);
+		    if (evlog->runargv == NULL)
 			goto bad;
 		}
 		continue;
@@ -233,8 +233,8 @@ evlog_new(TimeSpec *submit_time, InfoMessage **info_msgs, size_t infolen,
 	    }
 	    if (strcmp(key, "runenv") == 0) {
 		if (type_matches(info, source, INFO_MESSAGE__VALUE_STRLISTVAL)) {
-		    evlog->envp = strlist_copy(info->u.strlistval);
-		    if (evlog->envp == NULL)
+		    evlog->runenv = strlist_copy(info->u.strlistval);
+		    if (evlog->runenv == NULL)
 			goto bad;
 		}
 		continue;
@@ -300,6 +300,14 @@ evlog_new(TimeSpec *submit_time, InfoMessage **info_msgs, size_t infolen,
 			    U_("unable to allocate memory"));
 			goto bad;
 		    }
+		}
+		continue;
+	    }
+	    if (strcmp(key, "submitenv") == 0) {
+		if (type_matches(info, source, INFO_MESSAGE__VALUE_STRLISTVAL)) {
+		    evlog->submitenv = strlist_copy(info->u.strlistval);
+		    if (evlog->submitenv == NULL)
+			goto bad;
 		}
 		continue;
 	    }
@@ -573,7 +581,7 @@ create_iolog_path(struct connection_closure *closure)
      * Calls mkdtemp() if pathbuf ends in XXXXXX.
      */
     if (!iolog_mkpath(pathbuf)) {
-	sudo_warnx(U_("unable to create iolog path %s"), pathbuf);
+	sudo_warn(U_("unable to create iolog path %s"), pathbuf);
         goto bad;
     }
     if ((evlog->iolog_path = strdup(pathbuf)) == NULL) {
@@ -891,8 +899,8 @@ update_elapsed_time(TimeSpec *delta, struct timespec *elapsed)
     debug_decl(update_elapsed_time, SUDO_DEBUG_UTIL);
 
     /* Cannot use timespecadd since msg doesn't use struct timespec. */
-    elapsed->tv_sec += delta->tv_sec;
-    elapsed->tv_nsec += delta->tv_nsec;
+    elapsed->tv_sec += (time_t)delta->tv_sec;
+    elapsed->tv_nsec += (long)delta->tv_nsec;
     while (elapsed->tv_nsec >= 1000000000) {
 	elapsed->tv_sec++;
 	elapsed->tv_nsec -= 1000000000;

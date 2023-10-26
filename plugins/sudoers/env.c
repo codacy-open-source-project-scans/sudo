@@ -48,7 +48,7 @@
 #include <limits.h>
 #include <pwd.h>
 
-#include "sudoers.h"
+#include <sudoers.h>
 
 /*
  * Flags used in rebuild_env()
@@ -229,6 +229,20 @@ static const char *initial_keepenv_table[] = {
 };
 
 /*
+ * Free our copy (or copies) of the environment.
+ * This function is only safe to call after the command has executed.
+ */
+void
+env_free(void)
+{
+    sudoers_gc_remove(GC_PTR, env.envp);
+    free(env.envp);
+    sudoers_gc_remove(GC_PTR, env.old_envp);
+    free(env.old_envp);
+    memset(&env, 0, sizeof(env));
+}
+
+/*
  * Initialize env based on envp.
  */
 bool
@@ -243,7 +257,10 @@ env_init(char * const envp[])
 	sudoers_gc_remove(GC_PTR, env.old_envp);
 	free(env.old_envp);
 
-	/* Reset to initial state but keep a pointer to what we allocated. */
+	/*
+	 * Reset to initial state but keep a pointer to what we allocated
+	 * since it will be passed to execve(2).
+	 */
 	env.old_envp = env.envp;
 	env.envp = NULL;
 	env.env_size = 0;
@@ -854,7 +871,7 @@ bool
 rebuild_env(const struct sudoers_context *ctx)
 {
     char **ep, *cp, *ps1;
-    char idbuf[MAX_UID_T_LEN + 1];
+    char idbuf[STRLEN_MAX_UNSIGNED(uid_t) + 1];
     unsigned int didvar;
     bool reset_home = false;
     int len;
@@ -911,7 +928,7 @@ rebuild_env(const struct sudoers_context *ctx)
 		}
 	    }
 #endif /* HAVE_LOGIN_CAP_H */
-#if defined(_AIX) || (defined(__linux__) && !defined(HAVE_PAM))
+#ifdef _PATH_ENVIRONMENT
 	    /* Insert system-wide environment variables. */
 	    if (!read_env_file(ctx, _PATH_ENVIRONMENT, true, false))
 		sudo_warn("%s", _PATH_ENVIRONMENT);

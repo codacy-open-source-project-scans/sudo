@@ -43,10 +43,10 @@
 #include <signal.h>
 #include <termios.h>		/* for struct winsize on HP-UX */
 
-#include "sudo.h"
-#include "sudo_exec.h"
-#include "sudo_plugin.h"
-#include "sudo_plugin_int.h"
+#include <sudo.h>
+#include <sudo_exec.h>
+#include <sudo_plugin.h>
+#include <sudo_plugin_int.h>
 
 /* Tail queue of messages to send to the monitor. */
 struct monitor_message {
@@ -113,10 +113,9 @@ pty_cleanup(struct exec_closure *ec, int wstatus)
 	/* Only restore the terminal if sudo is the foreground process. */
 	const pid_t tcpgrp = tcgetpgrp(io_fds[SFD_USERTTY]);
 	if (tcpgrp == ec->ppgrp) {
-	    if (sudo_term_restore(io_fds[SFD_USERTTY], false))
-		ec->term_raw = false;
-	    else
+	    if (!sudo_term_restore(io_fds[SFD_USERTTY], false))
 		sudo_warn("%s", U_("unable to restore terminal settings"));
+	    ec->term_raw = false;
 	}
     }
 
@@ -184,8 +183,7 @@ resume_terminal(struct exec_closure *ec)
 
     if (ec->foreground) {
 	/* Foreground process, set tty to raw mode. */
-	if (sudo_term_raw(io_fds[SFD_USERTTY], term_raw_flags))
-	    ec->term_raw = true;
+	ec->term_raw = sudo_term_raw(io_fds[SFD_USERTTY], term_raw_flags);
     } else {
 	/* Background process, no access to tty. */
 	ec->term_raw = false;
@@ -254,10 +252,9 @@ suspend_sudo_pty(struct exec_closure *ec, int signo)
 
 	/* Restore original tty mode before suspending. */
 	if (ec->term_raw) {
-	    if (sudo_term_restore(io_fds[SFD_USERTTY], false))
-		ec->term_raw = false;
-	    else
+	    if (!sudo_term_restore(io_fds[SFD_USERTTY], false))
 		sudo_warn("%s", U_("unable to restore terminal settings"));
+	    ec->term_raw = false;
 	}
 
 	/* Log the suspend event. */
@@ -490,7 +487,7 @@ write_callback(int fd, int what, void *v)
 	}
     } else {
 	sudo_debug_printf(SUDO_DEBUG_INFO,
-	    "wrote %zd bytes to fd %d", n, fd);
+	    "wrote %zd of %u bytes to fd %d", n, iob->len - iob->off, fd);
 	iob->off += (unsigned int)n;
 	/* Disable writer and reset the buffer if fully consumed. */
 	if (iob->off == iob->len) {
@@ -1261,6 +1258,11 @@ exec_pty(struct command_details *details,
 	    ec->term_raw = true;
     }
 
+    sudo_debug_printf(SUDO_DEBUG_INFO,
+	"%s: follower: %d, stdin: %d, stdout: %d, stderr: %d", __func__,
+	io_fds[SFD_FOLLOWER], io_fds[SFD_STDIN], io_fds[SFD_STDOUT],
+	io_fds[SFD_STDERR]);
+
     /*
      * Block signals until we have our handlers setup in the parent so
      * we don't miss SIGCHLD if the command exits immediately.
@@ -1325,10 +1327,8 @@ exec_pty(struct command_details *details,
     /* Tell the monitor to continue now that the follower is closed. */
     cstat->type = CMD_SIGNO;
     cstat->val = 0;
-    while (send(sv[0], cstat, sizeof(*cstat), 0) == -1) {
-	if (errno != EINTR && errno != EAGAIN)
-	    sudo_fatal("%s", U_("unable to send message to monitor process"));
-    }
+    if (send(sv[0], cstat, sizeof(*cstat), 0) == -1)
+	sudo_fatal("%s", U_("unable to send message to monitor process"));
 
     /* Close the other end of the stdin/stdout/stderr pipes and socketpair. */
     if (io_pipe[STDIN_FILENO][0] != -1)

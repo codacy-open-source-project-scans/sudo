@@ -29,10 +29,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "sudo_compat.h"
-#include "sudo_debug.h"
-#include "sudo_lbuf.h"
-#include "sudo_util.h"
+#include <sudo_compat.h>
+#include <sudo_debug.h>
+#include <sudo_lbuf.h>
+#include <sudo_util.h>
 
 void
 sudo_lbuf_init_v1(struct sudo_lbuf *lbuf, sudo_lbuf_output_t output,
@@ -302,7 +302,7 @@ sudo_lbuf_append_v1(struct sudo_lbuf *lbuf, const char * restrict fmt, ...)
 		num_end++;
 	    if (num_end[0] == '$' && num_end[1] == 's' && num_end > num_start) {
 		/* Convert the numeric part to an integer */
-		char numbuf[(((sizeof(int) * 8) + 2) / 3) + 2];
+		char numbuf[STRLEN_MAX_SIGNED(int) + 1];
 		len = (unsigned int)(num_end - num_start);
 		if (len >= sizeof(numbuf)) {
 		    errno = EINVAL;

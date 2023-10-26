@@ -64,9 +64,9 @@
 # include <prot.h>
 #endif /* HAVE_GETPRPWNAM && HAVE_SET_AUTH_PARAMETERS */
 
-#include "sudo.h"
-#include "sudo_plugin.h"
-#include "sudo_plugin_int.h"
+#include <sudo.h>
+#include <sudo_plugin.h>
+#include <sudo_plugin_int.h>
 
 /*
  * Local variables
@@ -479,7 +479,8 @@ get_user_groups(const char *user, struct sudo_cred *cred)
     /*
      * Format group list as a comma-separated string of gids.
      */
-    glsize = sizeof("groups=") - 1 + ((size_t)cred->ngroups * (MAX_UID_T_LEN + 1));
+    glsize = sizeof("groups=") - 1 +
+	((size_t)cred->ngroups * (STRLEN_MAX_UNSIGNED(gid_t) + 1));
     if ((gid_list = malloc(glsize)) == NULL)
 	goto done;
     memcpy(gid_list, "groups=", sizeof("groups=") - 1);
@@ -572,8 +573,11 @@ get_user_info(struct user_details *ud)
     if ((ud->shell = getenv("SHELL")) == NULL || ud->shell[0] == '\0') {
 	ud->shell = pw->pw_shell[0] ? pw->pw_shell : _PATH_SUDO_BSHELL;
     }
-    if ((ud->shell = strdup(ud->shell)) == NULL)
+    if ((cp = strdup(ud->shell)) == NULL)
 	goto oom;
+    if (!gc_add(GC_PTR, cp))
+	sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
+    ud->shell = cp;
 
     if (asprintf(&info[++i], "pid=%d", (int)ud->pid) == -1)
 	goto oom;
@@ -597,6 +601,8 @@ get_user_info(struct user_details *ud)
     if ((cp = get_user_groups(ud->username, &ud->cred)) == NULL)
 	goto oom;
     info[++i] = cp;
+    if (!gc_add(GC_PTR, ud->cred.groups))
+	sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 
     mask = umask(0);
     umask(mask);
@@ -803,6 +809,10 @@ command_info_to_details(char * const info[], struct command_details *details)
 		    /* sudo_parse_gids() will print a warning on error. */
 		    if (details->cred.ngroups == -1)
 			exit(EXIT_FAILURE); /* XXX */
+		    if (!gc_add(GC_PTR, details->cred.groups)) {
+			sudo_fatalx(U_("%s: %s"), __func__,
+			    U_("unable to allocate memory"));
+		    }
 		    break;
 		}
 		if (strncmp("runas_uid=", info[i], sizeof("runas_uid=") - 1) == 0) {
@@ -903,6 +913,8 @@ command_info_to_details(char * const info[], struct command_details *details)
     aix_restoreauthdb();
 #endif
     if (details->pw != NULL && (details->pw = pw_dup(details->pw)) == NULL)
+	sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
+    if (!gc_add(GC_PTR, details->pw))
 	sudo_fatalx(U_("%s: %s"), __func__, U_("unable to allocate memory"));
 
 #ifdef HAVE_SELINUX

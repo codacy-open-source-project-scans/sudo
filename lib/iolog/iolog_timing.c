@@ -28,7 +28,7 @@
 #ifdef HAVE_STDBOOL_H
 # include <stdbool.h>
 #else
-# include "compat/stdbool.h"
+# include <compat/stdbool.h>
 #endif /* HAVE_STDBOOL_H */
 #include <string.h>
 #include <signal.h>
@@ -39,13 +39,13 @@
 #include <fcntl.h>
 #include <time.h>
 
-#include "sudo_compat.h"
-#include "sudo_debug.h"
-#include "sudo_eventlog.h"
-#include "sudo_fatal.h"
-#include "sudo_gettext.h"
-#include "sudo_iolog.h"
-#include "sudo_util.h"
+#include <sudo_compat.h>
+#include <sudo_debug.h>
+#include <sudo_eventlog.h>
+#include <sudo_fatal.h>
+#include <sudo_gettext.h>
+#include <sudo_iolog.h>
+#include <sudo_util.h>
 
 static int timing_event_adj;
 
@@ -88,7 +88,7 @@ char *
 iolog_parse_delay(const char *cp, struct timespec *delay,
     const char *decimal_point)
 {
-    char numbuf[(((sizeof(long long) * 8) + 2) / 3) + 2];
+    char numbuf[STRLEN_MAX_SIGNED(long long) + 1];
     const char *errstr, *ep;
     long long llval;
     size_t len;
@@ -105,7 +105,7 @@ iolog_parse_delay(const char *cp, struct timespec *delay,
     }
     memcpy(numbuf, cp, len);
     numbuf[len] = '\0';
-    delay->tv_sec = sudo_strtonum(numbuf, 0, TIME_T_MAX, &errstr);
+    delay->tv_sec = (time_t)sudo_strtonum(numbuf, 0, TIME_T_MAX, &errstr);
     if (errstr != NULL) {
 	sudo_debug_printf(SUDO_DEBUG_ERROR|SUDO_DEBUG_LINENO,
 	    "%s: number of seconds is %s", numbuf, errstr);

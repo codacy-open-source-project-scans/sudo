@@ -23,9 +23,9 @@
 
 #include <config.h>
 
-#include "sudo_compat.h"
-#include "sudo_debug.h"
-#include "sudo_util.h"
+#include <sudo_compat.h>
+#include <sudo_debug.h>
+#include <sudo_util.h>
 
 /*
  * Round 32-bit unsigned length to the next highest power of two.
@@ -64,7 +64,7 @@ sudo_pow2_roundup_v2(size_t len)
 #if defined(__LP64__) && defined(HAVE___BUILTIN_CLZL)
     return 1UL << (64 - __builtin_clzl(len - 1));
 #elif !defined(__LP64__) && defined(HAVE___BUILTIN_CLZ)
-    return 1UL << (32 - __builtin_clz(len - 1));
+    return 1U << (32 - __builtin_clz(len - 1));
 #else
     len--;
     len |= len >> 1;
