@@ -90,14 +90,14 @@ struct sudoers_parser_config {
     gid_t sudoers_gid;
 };
 #define SUDOERS_PARSER_CONFIG_INITIALIZER {				\
-    NULL,	/* sudoers_path */					\
-    false,	/* strict */						\
-    1,		/* verbose level 1 */					\
-    true,	/* recovery */						\
-    false,	/* ignore_perms */					\
-    SUDOERS_MODE,							\
-    SUDOERS_UID,							\
-    SUDOERS_GID								\
+    .sudoers_path = NULL,						\
+    .strict = false,							\
+    .verbose = 1,							\
+    .recovery = true,							\
+    .ignore_perms = false,						\
+    .sudoers_mode = SUDOERS_MODE,					\
+    .sudoers_uid = SUDOERS_UID,						\
+    .sudoers_gid = SUDOERS_GID						\
 }
 
 /*
@@ -109,6 +109,11 @@ struct sudoers_plugin_settings {
     const char *ldap_secret;
     unsigned int flags;
 };
+#define SUDOERS_PLUGIN_SETTINGS_INITIALIZER {				\
+    .plugin_dir = _PATH_SUDO_PLUGIN_DIR,				\
+    .ldap_conf = _PATH_LDAP_CONF,					\
+    .ldap_secret = _PATH_LDAP_SECRET					\
+}
 
 /*
  * Info pertaining to the invoking user.
@@ -181,11 +186,6 @@ struct sudoers_runas_context {
 #endif
 };
 
-#define SUDOERS_CONTEXT_INITIALIZER {					\
-    SUDOERS_PARSER_CONFIG_INITIALIZER,					\
-    { _PATH_LDAP_CONF, _PATH_LDAP_SECRET, _PATH_SUDO_PLUGIN_DIR }	\
-}
-
 /*
  * Global configuration for the sudoers module.
  */
@@ -203,6 +203,10 @@ struct sudoers_context {
     unsigned int mode;
     char uuid_str[37];
 };
+#define SUDOERS_CONTEXT_INITIALIZER {					\
+    SUDOERS_PARSER_CONFIG_INITIALIZER,					\
+    SUDOERS_PLUGIN_SETTINGS_INITIALIZER,				\
+}
 
 /*
  * sudo_get_gidlist() type values
@@ -233,6 +237,7 @@ struct sudoers_context {
 #define FLAG_NO_CHECK		0x080U
 #define FLAG_NO_USER_INPUT	0x100U
 #define FLAG_BAD_PASSWORD	0x200U
+#define FLAG_INTERCEPT_SETID	0x400U
 
 /*
  * Return values for check_user() (rowhammer resistant).
