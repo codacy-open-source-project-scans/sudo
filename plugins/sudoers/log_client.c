@@ -1057,7 +1057,7 @@ done:
  * Appends the wire format message to the closure's write queue.
  * Returns true on success, false on failure.
  */
-static bool
+bool
 fmt_alert_message(struct client_closure *closure, struct eventlog *evlog)
 {
     ClientMessage client_msg = CLIENT_MESSAGE__INIT;
@@ -1962,7 +1962,7 @@ bad:
  * Allocate and initialize a new client closure
  */
 static struct client_closure *
-client_closure_alloc(struct log_details *details, struct timespec *now,
+client_closure_alloc(struct log_details *details, struct timespec *start_time,
     bool log_io, enum client_state initial_state, const char *reason)
 {
     struct client_closure *closure;
@@ -1983,8 +1983,10 @@ client_closure_alloc(struct log_details *details, struct timespec *now,
     closure->state = RECV_HELLO;
     closure->initial_state = initial_state;
 
-    closure->start_time.tv_sec = now->tv_sec;
-    closure->start_time.tv_nsec = now->tv_nsec;
+    if (start_time != NULL) {
+	closure->start_time.tv_sec = start_time->tv_sec;
+	closure->start_time.tv_nsec = start_time->tv_nsec;
+    }
 
     TAILQ_INIT(&closure->write_bufs);
     TAILQ_INIT(&closure->free_bufs);
@@ -2010,14 +2012,14 @@ oom:
 }
 
 struct client_closure *
-log_server_open(struct log_details *details, struct timespec *now,
+log_server_open(struct log_details *details, struct timespec *start_time,
     bool log_io, enum client_state initial_state, const char *reason)
 {
     struct client_closure *closure;
     static bool warned = false;
     debug_decl(log_server_open, SUDOERS_DEBUG_UTIL);
 
-    closure = client_closure_alloc(details, now, log_io, initial_state,
+    closure = client_closure_alloc(details, start_time, log_io, initial_state,
 	reason);
     if (closure == NULL)
 	goto bad;
