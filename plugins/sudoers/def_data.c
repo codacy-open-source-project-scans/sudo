@@ -157,15 +157,15 @@ struct sudo_defs_types sudo_defs_table[] = {
 	NULL,
     }, {
 	"rootpw", T_FLAG,
-	N_("Prompt for root's password, not the users's"),
+	N_("Prompt for root's password, not the user's"),
 	NULL,
     }, {
 	"runaspw", T_FLAG,
-	N_("Prompt for the runas_default user's password, not the users's"),
+	N_("Prompt for the runas_default user's password, not the user's"),
 	NULL,
     }, {
 	"targetpw", T_FLAG,
-	N_("Prompt for the target user's password, not the users's"),
+	N_("Prompt for the target user's password, not the user's"),
 	NULL,
     }, {
 	"use_loginclass", T_FLAG,
@@ -694,6 +694,10 @@ struct sudo_defs_types sudo_defs_table[] = {
     }, {
 	"apparmor_profile", T_STR,
 	N_("AppArmor profile to use in the new security context: %s"),
+	NULL,
+    }, {
+	"cmddenial_message", T_STR,
+	N_("Command denial message: %s"),
 	NULL,
     }, {
 	NULL, 0, NULL
