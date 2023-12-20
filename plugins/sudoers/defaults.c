@@ -67,13 +67,13 @@ static int  store_str(const char *str, struct sudo_defs_types *def);
 static bool store_syslogfac(const char *str, struct sudo_defs_types *def);
 static bool store_syslogpri(const char *str, struct sudo_defs_types *def);
 static bool store_timeout(const char *str, struct sudo_defs_types *def);
-static bool store_tuple(const char *str, struct sudo_defs_types *def);
+static bool store_tuple(const char *str, struct sudo_defs_types *def, int op);
 static bool store_uint(const char *str, struct sudo_defs_types *def);
 static bool store_timespec(const char *str, struct sudo_defs_types *def);
 static bool store_rlimit(const char *str, struct sudo_defs_types *def);
 static bool store_plugin(const char *str, struct sudo_defs_types *def, int op);
 static bool list_op(const char *str, size_t, struct list_members *list, enum list_ops op);
-static bool valid_path(const struct sudoers_context *ctx, struct sudo_defs_types *def, const char *val, const char *file, int line, int column, bool quiet);
+static bool valid_path(const struct sudoers_context *ctx, const struct sudo_defs_types *def, const char *val, const char *file, int line, int column, bool quiet);
 
 /*
  * Table describing compile-time and run-time options.
@@ -86,9 +86,9 @@ static bool valid_path(const struct sudoers_context *ctx, struct sudo_defs_types
 void
 dump_defaults(void)
 {
-    struct sudo_defs_types *cur;
-    struct list_member *item;
-    struct def_values *def;
+    const struct sudo_defs_types *cur;
+    const struct list_member *item;
+    const struct def_values *def;
     const char *desc;
     debug_decl(dump_defaults, SUDOERS_DEBUG_DEFAULTS);
 
@@ -233,18 +233,18 @@ parse_default_entry(const struct sudoers_context *ctx,
      */
     if (val == NULL) {
 	switch (def->type & T_MASK) {
-	case T_FLAG:
-	    break;
-	case T_TUPLE:
-	    if (ISSET(def->type, T_BOOL))
-		break;
-	    FALLTHROUGH;
 	case T_LOGFAC:
 	    if (op == true) {
 		/* Use default syslog facility if none specified. */
 		val = LOGFAC;
 	    }
 	    break;
+	case T_FLAG:
+	    break;
+	case T_TUPLE:
+	    if (ISSET(def->type, T_BOOL))
+		break;
+	    FALLTHROUGH;
 	default:
 	    if (!ISSET(def->type, T_BOOL) || op != false) {
 		defaults_warnx(ctx, file, line, column, quiet,
@@ -303,7 +303,7 @@ parse_default_entry(const struct sudoers_context *ctx,
 	    rc = store_timeout(val, def);
 	    break;
 	case T_TUPLE:
-	    rc = store_tuple(val, def);
+	    rc = store_tuple(val, def, op);
 	    break;
 	case T_TIMESPEC:
 	    rc = store_timespec(val, def);
@@ -593,8 +593,8 @@ init_defaults(void)
 #endif
 
     /* Password flags also have a string and integer component. */
-    (void) store_tuple("any", &sudo_defs_table[I_LISTPW]);
-    (void) store_tuple("all", &sudo_defs_table[I_VERIFYPW]);
+    (void) store_tuple("any", &sudo_defs_table[I_LISTPW], 0);
+    (void) store_tuple("all", &sudo_defs_table[I_VERIFYPW], 0);
 
     /* Then initialize the int-like things. */
 #ifdef SUDO_UMASK
@@ -695,7 +695,7 @@ oom:
  * Returns true if it matches, else false.
  */
 static bool
-default_type_matches(struct defaults *d, int what)
+default_type_matches(const struct defaults *d, int what)
 {
     debug_decl(default_type_matches, SUDOERS_DEBUG_DEFAULTS);
 
@@ -730,7 +730,7 @@ default_type_matches(struct defaults *d, int what)
  */
 static bool
 default_binding_matches(const struct sudoers_context *ctx,
-    struct sudoers_parse_tree *parse_tree, struct defaults *d, int what)
+    struct sudoers_parse_tree *parse_tree, const struct defaults *d, int what)
 {
     debug_decl(default_binding_matches, SUDOERS_DEBUG_DEFAULTS);
 
@@ -764,9 +764,9 @@ default_binding_matches(const struct sudoers_context *ctx,
 bool
 update_defaults(struct sudoers_context *ctx,
     struct sudoers_parse_tree *parse_tree,
-    struct defaults_list *defs, int what, bool quiet)
+    const struct defaults_list *defs, int what, bool quiet)
 {
-    struct defaults *d;
+    const struct defaults *d;
     bool global_defaults = false;
     bool ret = true;
     debug_decl(update_defaults, SUDOERS_DEBUG_DEFAULTS);
@@ -834,7 +834,7 @@ update_defaults(struct sudoers_context *ctx,
 bool
 check_defaults(const struct sudoers_parse_tree *parse_tree, bool quiet)
 {
-    struct defaults *d;
+    const struct defaults *d;
     bool ret = true;
     int idx;
     debug_decl(check_defaults, SUDOERS_DEBUG_DEFAULTS);
@@ -1013,18 +1013,28 @@ store_timespec(const char *str, struct sudo_defs_types *def)
 }
 
 static bool
-store_tuple(const char *str, struct sudo_defs_types *def)
+store_tuple(const char *str, struct sudo_defs_types *def, int op)
 {
-    struct def_values *v;
+    const struct def_values *v;
     debug_decl(store_tuple, SUDOERS_DEBUG_DEFAULTS);
 
     /*
      * Look up tuple value by name to find enum def_tuple value.
-     * For negation to work the first element of enum def_tuple
-     * must be equivalent to boolean false.
+     * A tuple must have at least two possible values.
      */
     if (str == NULL) {
-	def->sd_un.ival = 0;
+	/*
+	 * Boolean context: true maps to values[1], false maps to values[0].
+	 */
+	if (op == true) {
+	    v = &def->values[1];
+	    def->sd_un.ival = v->nval;
+	} else if (op == false) {
+	    v = &def->values[0];
+	    def->sd_un.ival = v->nval;
+	} else {
+	    debug_return_bool(false);
+	}
     } else {
 	for (v = def->values; v->sval != NULL; v++) {
 	    if (strcmp(v->sval, str) == 0) {
@@ -1167,7 +1177,7 @@ store_timeout(const char *str, struct sudo_defs_types *def)
 }
 
 static bool
-valid_path(const struct sudoers_context *ctx, struct sudo_defs_types *def,
+valid_path(const struct sudoers_context *ctx, const struct sudo_defs_types *def,
     const char *val, const char *file, int line, int column, bool quiet)
 {
     bool ret = true;
