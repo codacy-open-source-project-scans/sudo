@@ -512,7 +512,7 @@ log_auth_failure(const struct sudoers_context *ctx, unsigned int status,
 	if (ISSET(ctx->mode, MODE_LIST|MODE_VALIDATE))
 	    logit = false;
     } else if (!ISSET(status, FLAG_BAD_PASSWORD)) {
-	/* Autheticated OK, sudoers denials are logged separately. */
+	/* Authenticated OK, sudoers denials are logged separately. */
 	logit = false;
     }
 
@@ -1064,7 +1064,7 @@ sudoers_log_open(int type, const char *log_file)
 	    break;
 	case EVLOG_FILE:
 	    /* Open log file as root, mode 0600 (cannot append to JSON). */
-	    if (def_log_format == json) {
+	    if (def_log_format == json || def_log_format == json_pretty) {
 		flags = O_RDWR|O_CREAT;
 		omode = "w";
 	    } else {
@@ -1140,8 +1140,8 @@ init_eventlog_config(void)
     if (def_logfile)
 	logtype |= EVLOG_FILE;
 
+    sudoers_set_log_format(def_log_format);
     eventlog_set_type(logtype);
-    eventlog_set_format(def_log_format == sudo ? EVLOG_SUDO : EVLOG_JSON);
     eventlog_set_syslog_acceptpri(def_syslog_goodpri);
     eventlog_set_syslog_rejectpri(def_syslog_badpri);
     eventlog_set_syslog_alertpri(def_syslog_badpri);
