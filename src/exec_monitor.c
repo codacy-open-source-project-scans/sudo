@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: ISC
  *
- * Copyright (c) 2009-2023 Todd C. Miller <Todd.Miller@sudo.ws>
+ * Copyright (c) 2009-2024 Todd C. Miller <Todd.Miller@sudo.ws>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -118,6 +118,8 @@ deliver_signal(struct monitor_closure *mc, int signo, bool from_parent)
 	/* NOTREACHED */
     default:
 	/* Relay signal to command. */
+	sudo_debug_printf(SUDO_DEBUG_NOTICE, "%s: killpg(%d, %d)",
+	    __func__, (int)mc->cmnd_pid, signo);
 	killpg(mc->cmnd_pid, signo);
 	break;
     }
@@ -308,6 +310,41 @@ mon_errsock_cb(int fd, int what, void *v)
     debug_return;
 }
 
+/*
+ * Called when the user's terminal has gone away but before our pty is
+ * actually revoked.  We simulate the effect of the session leader
+ * (sudo) exiting by sending SIGHUP to the foreground process group.
+ * The monitor process will not actually exit until the command exits.
+ */
+static void
+mon_handle_revoke(int fd, pid_t pgrp, struct command_status *cstat)
+{
+    debug_decl(mon_handle_revoke, SUDO_DEBUG_EXEC);
+
+    /*
+     * Signal the foreground process group (or the command's process group
+     * if no pty).  We must do this before the pty is revoked by the main
+     * sudo process so we can determine the foreground process group.
+     * Otherwise, if the foreground process group is different from the
+     * command's process group, it will not be signaled.  This fixes a
+     * problem on Linux with, e.g. "sudo su" where su(1) blocks SIGHUP.
+     */
+    if (io_fds[SFD_FOLLOWER] != -1) {
+	const pid_t tcpgrp = tcgetpgrp(io_fds[SFD_FOLLOWER]);
+	if (tcpgrp != -1)
+	    pgrp = tcpgrp;
+    }
+    sudo_debug_printf(SUDO_DEBUG_NOTICE, "%s: killpg(%d, SIGHUP)",
+	__func__, (int)pgrp);
+    killpg(pgrp, SIGHUP);
+
+    /*
+     * Now that the foreground process as been signaled, send the
+     * parent CMD_REVOKE to close the pty leader, revoking the pty.
+     */
+    send_status(fd, cstat);
+}
+
 static void
 mon_backchannel_cb(int fd, int what, void *v)
 {
@@ -334,11 +371,17 @@ mon_backchannel_cb(int fd, int what, void *v)
 	mc->cstat->val = n ? EIO : ECONNRESET;
 	sudo_ev_loopbreak(mc->evbase);
     } else {
-	if (cstmp.type == CMD_SIGNO) {
+	switch (cstmp.type) {
+	case CMD_REVOKE:
+	    mon_handle_revoke(fd, mc->cmnd_pid, &cstmp);
+	    break;
+	case CMD_SIGNO:
 	    deliver_signal(mc, cstmp.val, true);
-	} else {
+	    break;
+	default:
 	    sudo_warnx(U_("unexpected reply type on backchannel: %d"),
 		cstmp.type);
+	    break;
 	}
     }
     debug_return;
