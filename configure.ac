@@ -3,7 +3,7 @@ dnl Use the top-level autogen.sh script to generate configure and config.h.in
 dnl
 dnl SPDX-License-Identifier: ISC
 dnl
-dnl Copyright (c) 1994-1996, 1998-2023 Todd C. Miller <Todd.Miller@sudo.ws>
+dnl Copyright (c) 1994-1996, 1998-2024 Todd C. Miller <Todd.Miller@sudo.ws>
 dnl
 dnl Permission to use, copy, modify, and distribute this software for any
 dnl purpose with or without fee is hereby granted, provided that the above
@@ -18,7 +18,7 @@ dnl ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 dnl OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 dnl
 AC_PREREQ([2.69])
-AC_INIT([sudo], [1.9.15p5], [https://bugzilla.sudo.ws/], [sudo])
+AC_INIT([sudo], [1.9.16], [https://bugzilla.sudo.ws/], [sudo])
 AC_CONFIG_HEADERS([config.h pathnames.h])
 AC_CONFIG_SRCDIR([src/sudo.c])
 AC_CONFIG_AUX_DIR([scripts])
@@ -75,6 +75,7 @@ AC_SUBST([NOEXECFILE])dnl
 AC_SUBST([NOEXECDIR])dnl
 AC_SUBST([noexec_file])dnl
 AC_SUBST([sesh_file])dnl
+AC_SUBST([visudo])dnl
 AC_SUBST([INSTALL_BACKUP])dnl
 AC_SUBST([INSTALL_INTERCEPT])dnl
 AC_SUBST([INSTALL_NOEXEC])dnl
@@ -176,6 +177,7 @@ AC_SUBST([sssd_lib])
 AC_SUBST([nsswitch_conf])
 AC_SUBST([netsvc_conf])
 AC_SUBST([secure_path])
+AC_SUBST([secure_path_set])
 AC_SUBST([editor])
 AC_SUBST([pam_session])
 AC_SUBST([pam_login_service])
@@ -225,8 +227,10 @@ netsvc_conf=/etc/netsvc.conf
 intercept_file="$libexecdir/sudo/sudo_intercept.so"
 noexec_file="$libexecdir/sudo/sudo_noexec.so"
 sesh_file="$libexecdir/sudo/sesh"
+visudo="$sbindir/visudo"
 nsswitch_conf=/etc/nsswitch.conf
-secure_path="not set"
+secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+secure_path_set="disabled"
 pam_session=on
 pam_login_service=sudo
 plugindir="$libexecdir/sudo"
@@ -440,8 +444,6 @@ AC_ARG_WITH(csops, [AS_HELP_STRING([--with-csops], [add CSOps standard options])
 		CHECKSIA=false
 		with_ignore_dot=yes
 		insults=on
-		with_classic_insults=yes
-		with_csops_insults=yes
 		with_env_editor=yes
 		: ${mansectsu='8'}
 		: ${mansectform='5'}
@@ -963,18 +965,23 @@ AC_ARG_WITH(tty-tickets, [AS_HELP_STRING([--with-tty-tickets], [use a different 
 		;;
 esac])
 
+dnl
+dnl The order of the insults options is important.  The main option
+dnl must come first, followed by all-insults, then the individual ones.
+dnl The classic and csops insult sets are always included by default.
+dnl
+with_classic_insults=yes
+with_csops_insults=yes
 AC_ARG_WITH(insults, [AS_HELP_STRING([--with-insults], [insult the user for entering an incorrect password])],
 [case $with_insults in
     yes)	insults=on
 		AC_DEFINE(USE_INSULTS)
-		with_classic_insults=yes
-		with_csops_insults=yes
 		;;
     disabled)	insults=off
-		with_classic_insults=yes
-		with_csops_insults=yes
 		;;
     no)		insults=off
+		with_classic_insults=no
+		with_csops_insults=no
 		;;
     *)		AC_MSG_ERROR([--with-insults does not take an argument.])
 		;;
@@ -1063,15 +1070,16 @@ SUDO_DEFINE_UNQUOTED(_PATH_LDAP_SECRET, "$ldap_secret", [Path to the ldap.secret
 
 AC_ARG_WITH(secure-path, [AS_HELP_STRING([--with-secure-path], [override the user's path with a built-in one])],
 [case $with_secure_path in
-    yes)	with_secure_path="/bin:/usr/ucb:/usr/bin:/usr/sbin:/sbin:/usr/etc:/etc"
-		AC_DEFINE_UNQUOTED(SECURE_PATH, "$with_secure_path")
-		secure_path="set to $with_secure_path"
+    yes)	with_secure_path="$secure_path"
 		;;
     no)		;;
-    *)		AC_DEFINE_UNQUOTED(SECURE_PATH, "$with_secure_path")
-		secure_path="set to $with_secure_path"
+    *)		secure_path="$with_secure_path"
 		;;
 esac])
+AS_IF([test "${with_secure_path-no}" != "no"], [
+	AC_DEFINE_UNQUOTED(SECURE_PATH, "$secure_path")
+	secure_path_set="set to $secure_path"
+])
 
 AC_ARG_WITH(interfaces, [AS_HELP_STRING([--without-interfaces], [don't try to read the ip addr of network interfaces])],
 [case $with_interfaces in
@@ -4298,6 +4306,13 @@ while test X"$noexec_file" != X"$_noexec_file"; do
     eval "noexec_file=\"$_noexec_file\""
 done
 
+# Update exec_prefix in visudo
+_visudo=
+while test X"$visudo" != X"$_visudo"; do
+    _visudo="$visudo"
+    eval "visudo=\"$_visudo\""
+done
+
 # Update exec_prefix in sesh_file
 _sesh_file=
 while test X"$sesh_file" != X"$_sesh_file"; do
@@ -4510,17 +4525,18 @@ echo "  password prompt		: ${passprompt}" >&AS_MESSAGE_FD
 echo "  password prompt timeout	: ${password_timeout} minutes" >&AS_MESSAGE_FD
 echo "  password tries		: ${passwd_tries}" >&AS_MESSAGE_FD
 echo "  bad password message		: ${badpass_message}" >&AS_MESSAGE_FD
-if test "$insults" = "on"; then
-    i=""
-    test "$with_python_insults" = "yes" && i="python ${i}"
-    test "$with_goons_insults" = "yes" && i="goons ${i}"
-    test "$with_hal_insults" = "yes" && i="hal ${i}"
-    test "$with_csops_insults" = "yes" && i="csops ${i}"
-    test "$with_classic_insults" = "yes" && i="classic ${i}"
-else
-    i=no
+insult_sets=""
+test "$with_python_insults" = "yes" && insult_sets="python ${insult_sets}"
+test "$with_goons_insults" = "yes" && insult_sets="goons ${insult_sets}"
+test "$with_hal_insults" = "yes" && insult_sets="hal ${insult_sets}"
+test "$with_csops_insults" = "yes" && insult_sets="csops ${insult_sets}"
+test "$with_classic_insults" = "yes" && insult_sets="classic ${insult_sets}"
+if test -z "$insult_sets"; then
+    insult_sets=no
+elif test "$insults" != "on"; then
+    insult_sets="${insult_sets} (disabled)"
 fi
-echo "  insults			: $i" >&AS_MESSAGE_FD
+echo "  insults			: $insult_sets" >&AS_MESSAGE_FD
 echo "  display lecture		: ${lecture}" >&AS_MESSAGE_FD
 echo "  timestamp (credential) type	: ${timestamp_type}" >&AS_MESSAGE_FD
 echo "  timestamp (credential) timeout: ${timeout} minutes" >&AS_MESSAGE_FD
